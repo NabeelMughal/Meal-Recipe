@@ -1,5 +1,5 @@
 import { getApps, getApp, initializeApp } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
+import { browserLocalPersistence, getAuth, setPersistence } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
 
 const firebaseConfig = {
@@ -13,4 +13,7 @@ const firebaseConfig = {
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig)
 
 export const auth = getAuth(app)
+void setPersistence(auth, browserLocalPersistence).catch((error) => {
+  console.error('Failed to enable Firebase session persistence:', error)
+})
 export const db = getFirestore(app)
