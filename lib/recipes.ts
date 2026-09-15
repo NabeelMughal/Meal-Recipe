@@ -90,6 +90,7 @@ export async function updateRecipe(id: string, input: RecipeInput) {
   if (!recipe || recipe.user_id !== user.uid) throw new Error('Recipe not found')
   await setDoc(doc(db, 'recipes', id), { ...recipePayload(user.uid, input), created_at: recipe.created_at }, { merge: true })
   await saveRelated(id, input)
+  return { id, ...recipePayload(user.uid, input), created_at: recipe.created_at }
 }
 
 export async function deleteRecipe(id: string) {

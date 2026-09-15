@@ -1,10 +1,9 @@
 'use client'
 
 import { useState, useEffect, FormEvent } from 'react'
-import { auth, db } from '@/lib/firebase'
-import { createClient } from '@/lib/firebase-client'
-import { addDoc, collection, getDocs, orderBy, query, where } from 'firebase/firestore'
-import { createRecipe, updateRecipe } from '@/lib/recipes'
+import { auth } from '@/lib/firebase'
+import { onAuthStateChanged } from 'firebase/auth'
+import { createCategory, createRecipe, listCategories, updateRecipe } from '@/lib/recipes'
 import { uploadRecipePhoto } from '@/lib/cloudinary'
 import { useRouter } from 'next/navigation'
 import { Plus, Trash2, Image as ImageIcon, Loader2, X, ArrowLeft } from 'lucide-react'
@@ -141,29 +140,22 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [title, description, ingredients, instructions, busy])
 
-  // Fetch user categories
+  // Fetch user categories after Firebase Auth restores the session.
   useEffect(() => {
-    async function load() {
-      const firebase = createClient()
-      const { data: { user } } = await firebase.auth.getUser()
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) return
-
       if (!navigator.onLine) {
         const cached = await listCachedCategories(user.uid)
         setCategories(cached)
         return
       }
-
       try {
-        const { data, error } = await firebase.from('categories').select('*').eq('user_id', user.uid).order('name', { ascending: true })
-        if (data && !error) {
-          setCategories(data)
-        }
+        setCategories(await listCategories())
       } catch (err) {
         console.error('Failed to load categories online:', err)
       }
-    }
-    load()
+    })
+    return unsubscribe
   }, [])
 
   function updateIngredient(index: number, key: keyof Ingredient, value: string) {
@@ -177,24 +169,14 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
     setCategoryLoading(true)
     setMessage('')
     try {
-      const firebase = createClient()
-      const { data: { user } } = await firebase.auth.getUser()
+      const user = auth.currentUser
       if (!user) {
         setMessage('Auth required.')
         setCategoryLoading(false)
         return
       }
 
-      const { data, error } = await firebase
-        .from('categories')
-        .insert({ user_id: user.uid, name: newCategoryName.trim() })
-        .select()
-        .single()
-
-      if (error || !data) {
-        throw new Error(error?.message ?? 'Failed to create category')
-      }
-
+      const data = await createCategory(newCategoryName.trim())
       setCategories((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
       setCategoryId(data.id)
       setNewCategoryName('')
@@ -215,11 +197,8 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
     setImageError('')
 
     try {
-      const compressedStrings = await Promise.all(
-        files.map((file) => compressImage(file))
-      )
-
-      setImageUrls((prev) => [...prev, ...compressedStrings])
+      const uploadedUrls = await Promise.all(files.map((file) => uploadRecipePhoto(file)))
+      setImageUrls((prev) => [...prev, ...uploadedUrls])
     } catch (err: any) {
       setImageError(err.message ?? 'Failed to process one or more images.')
     } finally {
@@ -241,89 +220,31 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
     event.preventDefault()
     setBusy(true)
     setMessage('')
-    
-    const firebase = createClient()
-    const { data: { user } } = await firebase.auth.getUser()
-    if (!user) { 
-      router.push('/?auth=login')
-      return 
-    }
-
-    const payload = {
-      user_id: user.uid,
-      title: title.trim(),
-      description: description.trim(),
-      preparation_time: Number(prep) || 0,
-      cooking_time: Number(cook) || 0,
-      servings: Math.max(1, Number(servings) || 1),
-      difficulty,
-      category_id: categoryId || null,
-      image_url: imageUrls.length > 0 ? JSON.stringify(imageUrls) : null
-    }
-
     try {
-      let targetId = recipe?.id
-
-      if (recipe) {
-        // UPDATE MODE
-        const { error } = await firebase
-          .from('recipes')
-          .update(payload)
-          .eq('id', recipe.id)
-          .eq('user_id', user.uid)
-
-        if (error) throw new Error(error.message)
-        
-        // Refresh ingredients and instructions
-        await firebase.from('ingredients').delete().eq('recipe_id', recipe.id)
-        await firebase.from('instructions').delete().eq('recipe_id', recipe.id)
-      } else {
-        // CREATE MODE
-        const { data: newRecipe, error } = await firebase
-          .from('recipes')
-          .insert(payload)
-          .select()
-          .single()
-
-        if (error || !newRecipe) throw new Error(error?.message ?? 'Failed to create recipe')
-        targetId = newRecipe.id
+      const user = auth.currentUser
+      if (!user) {
+        setMessage('Your session is still loading. Please try again.')
+        setBusy(false)
+        return
       }
 
-      // Insert ingredients
-      const ingredientRows = ingredients
-        .filter((item) => item.name.trim())
-        .map((item, position) => ({ 
-          recipe_id: targetId, 
-          name: item.name.trim(), 
-          quantity: item.quantity.trim(),
-          unit: item.unit.trim(),
-          notes: item.notes.trim(),
-          position 
-        }))
-
-      // Insert instructions
-      const instructionRows = instructions
-        .filter((item) => item.trim())
-        .map((item, position) => ({ 
-          recipe_id: targetId, 
-          instruction: item.trim(), 
-          position 
-        }))
-
-      if (ingredientRows.length) {
-        const { error: ingError } = await firebase.from('ingredients').insert(ingredientRows)
-        if (ingError) throw ingError
+      const payload = {
+        title: title.trim(),
+        description: description.trim(),
+        preparation_time: Number(prep) || 0,
+        cooking_time: Number(cook) || 0,
+        servings: Math.max(1, Number(servings) || 1),
+        difficulty,
+        category_id: categoryId || null,
+        image_url: imageUrls.length > 0 ? JSON.stringify(imageUrls) : null,
+        ingredients,
+        instructions,
       }
-      
-      if (instructionRows.length) {
-        const { error: instError } = await firebase.from('instructions').insert(instructionRows)
-        if (instError) throw instError
-      }
-
-      router.push(`/recipes/${targetId}`)
-      router.refresh()
+      const saved = recipe ? await updateRecipe(recipe.id, payload) : await createRecipe(payload)
+      window.alert(recipe ? 'Recipe updated.' : 'Recipe created.')
+      router.push(`/recipes/${saved?.id ?? recipe?.id}`)
     } catch (err: any) {
-      console.error(err)
+      console.error('Failed to save recipe:', err)
       setMessage(err.message ?? 'We could not save this recipe. Please try again.')
       setBusy(false)
     }
