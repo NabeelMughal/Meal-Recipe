@@ -2,6 +2,7 @@
 
 import { useState, useEffect, FormEvent } from 'react'
 import { auth, db } from '@/lib/firebase'
+import { createClient } from '@/lib/firebase-client'
 import { addDoc, collection, getDocs, orderBy, query, where } from 'firebase/firestore'
 import { createRecipe, updateRecipe } from '@/lib/recipes'
 import { uploadRecipePhoto } from '@/lib/cloudinary'

@@ -24,9 +24,9 @@ Daily-Meal is a mobile-first recipe PWA for saving, organizing, searching, and m
 - TypeScript
 - Tailwind CSS
 - shadcn/ui
-- Supabase Auth
-- Supabase PostgreSQL
-- Supabase Storage
+- Firebase Authentication
+- Firebase Firestore
+- Cloudinary image storage
 - IndexedDB
 - PWA
 
@@ -45,11 +45,14 @@ Install the dependencies:
 npm install
 ```
 
-Create a `.env.local` file and add your Supabase configuration:
+Create a `.env.local` file and add your Firebase configuration:
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
 ```
 
 Run the development server:
@@ -64,6 +67,6 @@ Open http://localhost:3000 in your browser.
 
 - [GitHub Repository](https://github.com/NabeelMughal/Daily-Meal)
 - [Next.js Documentation](https://nextjs.org/docs)
-- [Supabase Documentation](https://supabase.com/docs)
+- [Firebase Documentation](https://firebase.google.com/docs)
 - [Tailwind CSS Documentation](https://tailwindcss.com/docs)
 - [shadcn/ui Documentation](https://ui.shadcn.com/)
