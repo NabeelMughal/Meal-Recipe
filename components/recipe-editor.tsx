@@ -242,7 +242,7 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
       }
       const saved = recipe ? await updateRecipe(recipe.id, payload) : await createRecipe(payload)
       window.alert(recipe ? 'Recipe updated.' : 'Recipe created.')
-      router.push(`/recipes/${saved?.id ?? recipe?.id}`)
+      router.push(recipe ? `/recipes/${saved?.id ?? recipe.id}` : '/')
     } catch (err: any) {
       console.error('Failed to save recipe:', err)
       setMessage(err.message ?? 'We could not save this recipe. Please try again.')
