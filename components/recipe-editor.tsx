@@ -1,7 +1,11 @@
 'use client'
 
 import { useState, useEffect, FormEvent } from 'react'
+import { auth, db } from '@/lib/firebase'
 import { createClient } from '@/lib/firebase-client'
+import { addDoc, collection, getDocs, orderBy, query, where } from 'firebase/firestore'
+import { createRecipe, updateRecipe } from '@/lib/recipes'
+import { uploadRecipePhoto } from '@/lib/cloudinary'
 import { useRouter } from 'next/navigation'
 import { Plus, Trash2, Image as ImageIcon, Loader2, X, ArrowLeft } from 'lucide-react'
 import { listCachedCategories } from '@/lib/offline-db'

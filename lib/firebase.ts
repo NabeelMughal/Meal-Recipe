@@ -1,36 +1,16 @@
-import { getApps, initializeApp } from 'firebase/app'
+import { getApps, getApp, initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
-import { getStorage } from 'firebase/storage'
 
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'demo-api-key',
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || 'demo.firebaseapp.com',
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'demo-project',
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'demo-project.appspot.com',
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '000000000000',
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '1:000000000000:web:demo',
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 }
 
-export const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig)
+const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig)
+
 export const auth = getAuth(app)
 export const db = getFirestore(app)
-export const storage = getStorage(app)
-
-export const firebaseConfigKeys = Object.keys(firebaseConfig)
-
-export type FirebaseRecipe = {
-  id: string
-  userId: string
-  title: string
-  description: string
-  preparation_time: number
-  cooking_time: number
-  servings: number
-  difficulty: 'easy' | 'medium' | 'hard'
-  ingredients: Array<{ name: string; quantity: string; unit: string; notes: string }>
-  instructions: string[]
-  category_id?: string | null
-  image_url?: string | null
-  created_at: string
-}

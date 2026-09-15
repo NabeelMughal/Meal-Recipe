@@ -1,4 +1,5 @@
-const CACHE = 'crumb-shell-v2';
+const CACHE = 'crumb-shell-v3';
+const LEGACY_CACHES = ['crumb-shell-v1', 'crumb-shell-v2'];
 const STATIC_ASSETS = [
   '/manifest.webmanifest',
   '/placeholder.svg',
@@ -14,7 +15,15 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches.keys()
+      .then((cacheNames) => Promise.all(
+        cacheNames
+          .filter((cacheName) => LEGACY_CACHES.includes(cacheName))
+          .map((cacheName) => caches.delete(cacheName))
+      ))
+      .then(() => self.clients.claim())
+  );
 });
 
 self.addEventListener('fetch', (event) => {

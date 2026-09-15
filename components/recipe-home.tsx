@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Clock3, Heart, Plus, Search, SlidersHorizontal, Settings2, Loader2, Sparkles, X } from 'lucide-react'
 import { auth, db } from '@/lib/firebase'
-import { collection, deleteDoc, doc, getDocs, query, setDoc, where } from 'firebase/firestore'
+import { collection as firestoreCollection, deleteDoc, doc, getDocs, query as firestoreQuery, setDoc, where as firestoreWhere } from 'firebase/firestore'
 import { 
   cacheFavoriteRecipes, 
   listCachedFavorites, 
@@ -98,9 +98,9 @@ export function RecipeHome({ recipes, email, userId }: { recipes: Recipe[]; emai
     }
 
     try {
-      const snapshot = await getDocs(query(collection(db, 'categories'), where('user_id', '==', userId)))
-      const data = snapshot.docs
-        .map((item) => ({ id: item.id, ...item.data() } as Record<string, any>))
+      const snapshot = await getDocs(firestoreQuery(firestoreCollection(db, 'categories'), firestoreWhere('user_id', '==', userId)))
+      const data: Array<{ id: string; name: string; created_at?: string }> = snapshot.docs
+        .map((item) => ({ id: item.id, ...item.data() } as { id: string; name: string; created_at?: string }))
         .sort((a, b) => a.name.localeCompare(b.name))
       if (data.length >= 0) {
         setCategories(data)
@@ -109,7 +109,7 @@ export function RecipeHome({ recipes, email, userId }: { recipes: Recipe[]; emai
           id: item.id,
           userId,
           name: item.name,
-          createdAt: new Date(item.created_at).getTime()
+          createdAt: item.created_at ? new Date(item.created_at).getTime() : Date.now()
         })))
       }
     } catch (err) {
@@ -405,7 +405,7 @@ export function RecipeHome({ recipes, email, userId }: { recipes: Recipe[]; emai
             {visible.map((recipe) => { 
               const saved = favorites.includes(recipe.id)
               const cardImage = 'image_url' in recipe ? recipe.image_url : recipe.imageUrl ?? recipe.imageUrl
-              const recipeCategory = categories.find(c => c.id === (recipe.category_id ?? recipe.categoryId))
+              const recipeCategory = categories.find(c => c.id === ('category_id' in recipe ? recipe.category_id : recipe.categoryId))
 
               // Safe extraction of display cover image from single-URL or multiple-images JSON array
               let displayImageUrl = ''

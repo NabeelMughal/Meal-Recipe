@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/firebase-client'
+import { auth, db } from '@/lib/firebase'
+import { addDoc, collection, deleteDoc, doc, getDocs, orderBy, query, setDoc, where } from 'firebase/firestore'
 
 export type RecipeInput = {
   title: string
@@ -13,139 +14,116 @@ export type RecipeInput = {
   image_url?: string | null
 }
 
+function currentUser() {
+  if (!auth.currentUser) throw new Error('Authentication required')
+  return auth.currentUser
+}
+
+function recipeData(snapshot: any) {
+  return snapshot.docs.map((item: any) => ({ id: item.id, ...item.data() }))
+}
+
+async function related(recipeId: string) {
+  const [ingredients, instructions] = await Promise.all([
+    getDocs(query(collection(db, 'ingredients'), where('recipe_id', '==', recipeId), orderBy('position', 'asc'))),
+    getDocs(query(collection(db, 'instructions'), where('recipe_id', '==', recipeId), orderBy('position', 'asc'))),
+  ])
+  return {
+    ingredients: recipeData(ingredients),
+    instructions: recipeData(instructions),
+  }
+}
+
 export async function listRecipes() {
-  const firebase = await createClient()
-  const { data: { user } } = await firebase.auth.getUser()
+  const user = auth.currentUser
   if (!user) return []
-  const { data } = await firebase.from('recipes').select('*, ingredients(*), instructions(*)').eq('user_id', user.uid).order('created_at', { ascending: false })
-  return data ?? []
+  const snapshot = await getDocs(query(collection(db, 'recipes'), where('user_id', '==', user.uid), orderBy('created_at', 'desc')))
+  return Promise.all(recipeData(snapshot).map(async (recipe: any) => ({ ...recipe, ...(await related(recipe.id)) })))
 }
 
 export async function getRecipe(id: string) {
-  const firebase = await createClient()
-  const { data: { user } } = await firebase.auth.getUser()
+  const user = auth.currentUser
   if (!user) return null
-  const { data } = await firebase.from('recipes').select('*, ingredients(*), instructions(*)').eq('id', id).eq('user_id', user.uid).maybeSingle()
-  return data
+  const snapshot = await getDocs(query(collection(db, 'recipes'), where('__name__', '==', id), where('user_id', '==', user.uid)))
+  if (snapshot.empty) return null
+  return { ...recipeData(snapshot)[0], ...(await related(id)) }
+}
+
+async function saveRelated(recipeId: string, input: RecipeInput) {
+  const [oldIngredients, oldInstructions] = await Promise.all([
+    getDocs(query(collection(db, 'ingredients'), where('recipe_id', '==', recipeId))),
+    getDocs(query(collection(db, 'instructions'), where('recipe_id', '==', recipeId))),
+  ])
+  await Promise.all([...oldIngredients.docs, ...oldInstructions.docs].map((item) => deleteDoc(item.ref)))
+  await Promise.all([
+    ...input.ingredients.filter((item) => item.name.trim()).map((item, position) => addDoc(collection(db, 'ingredients'), { ...item, recipe_id: recipeId, name: item.name.trim(), position })),
+    ...input.instructions.filter(Boolean).map((instruction, position) => addDoc(collection(db, 'instructions'), { recipe_id: recipeId, instruction: instruction.trim(), position })),
+  ])
+}
+
+function recipePayload(userId: string, input: RecipeInput) {
+  return {
+    user_id: userId,
+    title: input.title.trim(),
+    description: input.description.trim(),
+    preparation_time: input.preparation_time,
+    cooking_time: input.cooking_time,
+    servings: input.servings,
+    difficulty: input.difficulty,
+    category_id: input.category_id || null,
+    image_url: input.image_url || null,
+    created_at: new Date().toISOString(),
+  }
 }
 
 export async function createRecipe(input: RecipeInput) {
-  const firebase = await createClient()
-  const { data: { user } } = await firebase.auth.getUser()
-  if (!user) throw new Error('Authentication required')
-  
-  const { data: recipe, error } = await firebase
-    .from('recipes')
-    .insert({ 
-      user_id: user.uid, 
-      title: input.title.trim(), 
-      description: input.description.trim(), 
-      preparation_time: input.preparation_time, 
-      cooking_time: input.cooking_time, 
-      servings: input.servings, 
-      difficulty: input.difficulty,
-      category_id: input.category_id || null,
-      image_url: input.image_url || null
-    })
-    .select()
-    .single()
-    
-  if (error || !recipe) throw new Error(error?.message ?? 'Unable to create recipe')
-  
-  const ingredients = input.ingredients
-    .filter((item) => item.name.trim())
-    .map((item, position) => ({ ...item, recipe_id: recipe.id, name: item.name.trim(), position }))
-    
-  const instructions = input.instructions
-    .filter(Boolean)
-    .map((instruction, position) => ({ recipe_id: recipe.id, instruction: instruction.trim(), position }))
-    
-  if (ingredients.length) await firebase.from('ingredients').insert(ingredients)
-  if (instructions.length) await firebase.from('instructions').insert(instructions)
-  
-  return recipe
+  const user = currentUser()
+  const payload = recipePayload(user.uid, input)
+  const ref = await addDoc(collection(db, 'recipes'), payload)
+  await saveRelated(ref.id, input)
+  return { id: ref.id, ...payload }
 }
 
 export async function updateRecipe(id: string, input: RecipeInput) {
-  const firebase = await createClient()
-  const { data: { user } } = await firebase.auth.getUser()
-  if (!user) throw new Error('Authentication required')
-  
-  const { error: recipeError } = await firebase
-    .from('recipes')
-    .update({
-      title: input.title.trim(),
-      description: input.description.trim(),
-      preparation_time: input.preparation_time,
-      cooking_time: input.cooking_time,
-      servings: input.servings,
-      difficulty: input.difficulty,
-      category_id: input.category_id || null,
-      image_url: input.image_url || null
-    })
-    .eq('id', id)
-    .eq('user_id', user.uid)
-    
-  if (recipeError) throw new Error(recipeError.message)
-  
-  // Re-insert ingredients
-  await firebase.from('ingredients').delete().eq('recipe_id', id)
-  const ingredients = input.ingredients
-    .filter((item) => item.name.trim())
-    .map((item, position) => ({ ...item, recipe_id: id, name: item.name.trim(), position }))
-  if (ingredients.length) await firebase.from('ingredients').insert(ingredients)
-  
-  // Re-insert instructions
-  await firebase.from('instructions').delete().eq('recipe_id', id)
-  const instructions = input.instructions
-    .filter(Boolean)
-    .map((instruction, position) => ({ recipe_id: id, instruction: instruction.trim(), position }))
-  if (instructions.length) await firebase.from('instructions').insert(instructions)
+  const user = currentUser()
+  const recipe = await getRecipe(id)
+  if (!recipe || recipe.user_id !== user.uid) throw new Error('Recipe not found')
+  await setDoc(doc(db, 'recipes', id), { ...recipePayload(user.uid, input), created_at: recipe.created_at }, { merge: true })
+  await saveRelated(id, input)
 }
 
 export async function deleteRecipe(id: string) {
-  const firebase = await createClient()
-  const { data: { user } } = await firebase.auth.getUser()
-  if (!user) throw new Error('Authentication required')
-  const { error } = await firebase.from('recipes').delete().eq('id', id).eq('user_id', user.uid)
-  if (error) throw new Error(error.message)
+  const user = currentUser()
+  const recipe = await getRecipe(id)
+  if (!recipe || recipe.user_id !== user.uid) throw new Error('Recipe not found')
+  await deleteDoc(doc(db, 'recipes', id))
 }
 
-// Category Operations
 export async function listCategories() {
-  const firebase = await createClient()
-  const { data: { user } } = await firebase.auth.getUser()
+  const user = auth.currentUser
   if (!user) return []
-  const { data, error } = await firebase.from('categories').select('*').eq('user_id', user.uid).order('name', { ascending: true })
-  if (error) {
-    console.error('Error fetching categories:', error.message)
-    return []
-  }
-  return data ?? []
+  const snapshot = await getDocs(query(collection(db, 'categories'), where('user_id', '==', user.uid), orderBy('name', 'asc')))
+  return recipeData(snapshot)
 }
 
 export async function createCategory(name: string) {
-  const firebase = await createClient()
-  const { data: { user } } = await firebase.auth.getUser()
-  if (!user) throw new Error('Authentication required')
-  const { data, error } = await firebase.from('categories').insert({ user_id: user.uid, name: name.trim() }).select().single()
-  if (error) throw new Error(error.message)
-  return data
+  const user = currentUser()
+  const value = { user_id: user.uid, name: name.trim(), created_at: new Date().toISOString() }
+  const ref = await addDoc(collection(db, 'categories'), value)
+  return { id: ref.id, ...value }
 }
 
 export async function updateCategory(id: string, name: string) {
-  const firebase = await createClient()
-  const { data: { user } } = await firebase.auth.getUser()
-  if (!user) throw new Error('Authentication required')
-  const { data, error } = await firebase.from('categories').update({ name: name.trim() }).eq('id', id).eq('user_id', user.uid).select().single()
-  if (error) throw new Error(error.message)
-  return data
+  const user = currentUser()
+  const categories = await getDocs(query(collection(db, 'categories'), where('__name__', '==', id), where('user_id', '==', user.uid)))
+  if (categories.empty) throw new Error('Category not found')
+  await setDoc(doc(db, 'categories', id), { name: name.trim() }, { merge: true })
+  return { id, ...categories.docs[0].data(), name: name.trim() }
 }
 
 export async function deleteCategory(id: string) {
-  const firebase = await createClient()
-  const { data: { user } } = await firebase.auth.getUser()
-  if (!user) throw new Error('Authentication required')
-  const { error } = await firebase.from('categories').delete().eq('id', id).eq('user_id', user.uid)
-  if (error) throw new Error(error.message)
+  const user = currentUser()
+  const categories = await getDocs(query(collection(db, 'categories'), where('__name__', '==', id), where('user_id', '==', user.uid)))
+  if (categories.empty) throw new Error('Category not found')
+  await deleteDoc(doc(db, 'categories', id))
 }
