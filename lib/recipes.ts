@@ -23,15 +23,50 @@ function recipeData(snapshot: any) {
   return snapshot.docs.map((item: any) => ({ id: item.id, ...item.data() }))
 }
 
+function sortByPosition(items: any[]) {
+  return items.sort((left, right) => (left.position ?? 0) - (right.position ?? 0))
+}
+
+async function listRelated(collectionName: 'ingredients' | 'instructions', recipeId: string) {
+  try {
+    const snapshot = await getDocs(query(
+      collection(db, collectionName),
+      where('recipe_id', '==', recipeId),
+      orderBy('position', 'asc'),
+    ))
+    return recipeData(snapshot)
+  } catch (error: any) {
+    console.error(`Failed to load ordered ${collectionName}:`, {
+      code: error?.code ?? 'unknown',
+      message: error?.message ?? String(error),
+    })
+
+    // A missing composite index should not make an otherwise valid recipe
+    // disappear. Fetch the scoped documents and apply the ordering locally.
+    try {
+      const fallbackSnapshot = await getDocs(query(
+        collection(db, collectionName),
+        where('recipe_id', '==', recipeId),
+      ))
+      return sortByPosition(recipeData(fallbackSnapshot))
+    } catch (fallbackError: any) {
+      console.error(`Failed to load ${collectionName} fallback:`, {
+        code: fallbackError?.code ?? 'unknown',
+        message: fallbackError?.message ?? String(fallbackError),
+      })
+      // Related rows are supplementary. Keep the recipe usable when their
+      // query is unavailable while preserving the base recipe document.
+      return []
+    }
+  }
+}
+
 async function related(recipeId: string) {
   const [ingredients, instructions] = await Promise.all([
-    getDocs(query(collection(db, 'ingredients'), where('recipe_id', '==', recipeId), orderBy('position', 'asc'))),
-    getDocs(query(collection(db, 'instructions'), where('recipe_id', '==', recipeId), orderBy('position', 'asc'))),
+    listRelated('ingredients', recipeId),
+    listRelated('instructions', recipeId),
   ])
-  return {
-    ingredients: recipeData(ingredients),
-    instructions: recipeData(instructions),
-  }
+  return { ingredients, instructions }
 }
 
 export async function listRecipes(userId?: string) {
