@@ -11,23 +11,6 @@ const firebaseConfig = {
 }
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig)
-export { app }
+
 export const auth = getAuth(app)
 export const db = getFirestore(app)
-export const firebaseConfigKeys = Object.keys(firebaseConfig)
-
-export type FirebaseRecipe = {
-  id: string
-  userId: string
-  title: string
-  description: string
-  preparation_time: number
-  cooking_time: number
-  servings: number
-  difficulty: 'easy' | 'medium' | 'hard'
-  ingredients: Array<{ name: string; quantity: string; unit: string; notes: string }>
-  instructions: string[]
-  category_id?: string | null
-  image_url?: string | null
-  created_at: string
-}
