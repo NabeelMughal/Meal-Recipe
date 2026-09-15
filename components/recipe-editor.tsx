@@ -145,13 +145,13 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
       if (!user) return
 
       if (!navigator.onLine) {
-        const cached = await listCachedCategories(user.id)
+        const cached = await listCachedCategories(user.uid)
         setCategories(cached)
         return
       }
 
       try {
-        const { data, error } = await firebase.from('categories').select('*').eq('user_id', user.id).order('name', { ascending: true })
+        const { data, error } = await firebase.from('categories').select('*').eq('user_id', user.uid).order('name', { ascending: true })
         if (data && !error) {
           setCategories(data)
         }
@@ -183,7 +183,7 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
 
       const { data, error } = await firebase
         .from('categories')
-        .insert({ user_id: user.id, name: newCategoryName.trim() })
+        .insert({ user_id: user.uid, name: newCategoryName.trim() })
         .select()
         .single()
 
@@ -246,7 +246,7 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
     }
 
     const payload = {
-      user_id: user.id,
+      user_id: user.uid,
       title: title.trim(),
       description: description.trim(),
       preparation_time: Number(prep) || 0,
@@ -266,7 +266,7 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
           .from('recipes')
           .update(payload)
           .eq('id', recipe.id)
-          .eq('user_id', user.id)
+          .eq('user_id', user.uid)
 
         if (error) throw new Error(error.message)
         

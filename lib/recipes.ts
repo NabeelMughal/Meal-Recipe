@@ -17,7 +17,7 @@ export async function listRecipes() {
   const firebase = await createClient()
   const { data: { user } } = await firebase.auth.getUser()
   if (!user) return []
-  const { data } = await firebase.from('recipes').select('*, ingredients(*), instructions(*)').eq('user_id', user.id).order('created_at', { ascending: false })
+  const { data } = await firebase.from('recipes').select('*, ingredients(*), instructions(*)').eq('user_id', user.uid).order('created_at', { ascending: false })
   return data ?? []
 }
 
@@ -25,7 +25,7 @@ export async function getRecipe(id: string) {
   const firebase = await createClient()
   const { data: { user } } = await firebase.auth.getUser()
   if (!user) return null
-  const { data } = await firebase.from('recipes').select('*, ingredients(*), instructions(*)').eq('id', id).eq('user_id', user.id).maybeSingle()
+  const { data } = await firebase.from('recipes').select('*, ingredients(*), instructions(*)').eq('id', id).eq('user_id', user.uid).maybeSingle()
   return data
 }
 
@@ -37,7 +37,7 @@ export async function createRecipe(input: RecipeInput) {
   const { data: recipe, error } = await firebase
     .from('recipes')
     .insert({ 
-      user_id: user.id, 
+      user_id: user.uid, 
       title: input.title.trim(), 
       description: input.description.trim(), 
       preparation_time: input.preparation_time, 
@@ -84,7 +84,7 @@ export async function updateRecipe(id: string, input: RecipeInput) {
       image_url: input.image_url || null
     })
     .eq('id', id)
-    .eq('user_id', user.id)
+    .eq('user_id', user.uid)
     
   if (recipeError) throw new Error(recipeError.message)
   
@@ -107,7 +107,7 @@ export async function deleteRecipe(id: string) {
   const firebase = await createClient()
   const { data: { user } } = await firebase.auth.getUser()
   if (!user) throw new Error('Authentication required')
-  const { error } = await firebase.from('recipes').delete().eq('id', id).eq('user_id', user.id)
+  const { error } = await firebase.from('recipes').delete().eq('id', id).eq('user_id', user.uid)
   if (error) throw new Error(error.message)
 }
 
@@ -116,7 +116,7 @@ export async function listCategories() {
   const firebase = await createClient()
   const { data: { user } } = await firebase.auth.getUser()
   if (!user) return []
-  const { data, error } = await firebase.from('categories').select('*').eq('user_id', user.id).order('name', { ascending: true })
+  const { data, error } = await firebase.from('categories').select('*').eq('user_id', user.uid).order('name', { ascending: true })
   if (error) {
     console.error('Error fetching categories:', error.message)
     return []
@@ -128,7 +128,7 @@ export async function createCategory(name: string) {
   const firebase = await createClient()
   const { data: { user } } = await firebase.auth.getUser()
   if (!user) throw new Error('Authentication required')
-  const { data, error } = await firebase.from('categories').insert({ user_id: user.id, name: name.trim() }).select().single()
+  const { data, error } = await firebase.from('categories').insert({ user_id: user.uid, name: name.trim() }).select().single()
   if (error) throw new Error(error.message)
   return data
 }
@@ -137,7 +137,7 @@ export async function updateCategory(id: string, name: string) {
   const firebase = await createClient()
   const { data: { user } } = await firebase.auth.getUser()
   if (!user) throw new Error('Authentication required')
-  const { data, error } = await firebase.from('categories').update({ name: name.trim() }).eq('id', id).eq('user_id', user.id).select().single()
+  const { data, error } = await firebase.from('categories').update({ name: name.trim() }).eq('id', id).eq('user_id', user.uid).select().single()
   if (error) throw new Error(error.message)
   return data
 }
@@ -146,6 +146,6 @@ export async function deleteCategory(id: string) {
   const firebase = await createClient()
   const { data: { user } } = await firebase.auth.getUser()
   if (!user) throw new Error('Authentication required')
-  const { error } = await firebase.from('categories').delete().eq('id', id).eq('user_id', user.id)
+  const { error } = await firebase.from('categories').delete().eq('id', id).eq('user_id', user.uid)
   if (error) throw new Error(error.message)
 }

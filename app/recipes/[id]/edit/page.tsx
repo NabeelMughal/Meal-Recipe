@@ -15,7 +15,7 @@ export default async function EditRecipePage({ params }: { params: Promise<{ id:
     .from('recipes')
     .select('*, ingredients(*), instructions(*)')
     .eq('id', id)
-    .eq('user_id', user.id)
+    .eq('user_id', user.uid)
     .maybeSingle()
 
   if (!recipe) notFound()

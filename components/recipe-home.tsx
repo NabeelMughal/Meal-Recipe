@@ -4,7 +4,8 @@ import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Clock3, Heart, Plus, Search, SlidersHorizontal, Settings2, Loader2, Sparkles, X } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
+import { auth, db } from '@/lib/firebase'
+import { collection, deleteDoc, doc, getDocs, query, setDoc, where } from 'firebase/firestore'
 import { 
   cacheFavoriteRecipes, 
   listCachedFavorites, 
@@ -97,14 +98,11 @@ export function RecipeHome({ recipes, email, userId }: { recipes: Recipe[]; emai
     }
 
     try {
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .eq('user_id', userId)
-        .order('name', { ascending: true })
-
-      if (data && !error) {
+      const snapshot = await getDocs(query(collection(db, 'categories'), where('user_id', '==', userId)))
+      const data = snapshot.docs
+        .map((item) => ({ id: item.id, ...item.data() } as Record<string, any>))
+        .sort((a, b) => a.name.localeCompare(b.name))
+      if (data.length >= 0) {
         setCategories(data)
         // Cache categories offline
         await cacheCategories(userId, data.map(item => ({
@@ -132,7 +130,7 @@ export function RecipeHome({ recipes, email, userId }: { recipes: Recipe[]; emai
       const matchesDifficulty = difficulty === 'all' || recipe.difficulty === difficulty
       const matchesFavorite = !onlyFavorites || favorites.includes(recipe.id)
       
-      const rCatId = recipe.category_id ?? recipe.categoryId ?? null
+      const rCatId = 'category_id' in recipe ? recipe.category_id : recipe.categoryId ?? null
       const matchesCategory = selectedCategoryId === 'all' || rCatId === selectedCategoryId
 
       return matchesQuery && matchesDifficulty && matchesFavorite && matchesCategory
@@ -155,29 +153,28 @@ export function RecipeHome({ recipes, email, userId }: { recipes: Recipe[]; emai
 
     if (!navigator.onLine) return 
 
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    const user = auth.currentUser
+    if (!user || user.uid !== userId) return
 
     try {
-      const result = saved 
-        ? await supabase.from('favorites').delete().eq('recipe_id', recipe.id).eq('user_id', user.id) 
-        : await supabase.from('favorites').insert({ user_id: user.id, recipe_id: recipe.id })
-
-      if (result.error) { 
-        // Rollback state if server returns error
-        setFavorites((current) => saved ? [...current, recipe.id] : current.filter((id) => id !== recipe.id))
-        if (!saved) { 
-          setFavoriteRecipes((current) => current.filter((item) => item.id !== recipe.id))
-          await setCachedFavorite(userId, recipe.id, false).catch(() => {})
-        } else {
-          const cached = toCachedRecipe(userId, recipe)
-          setFavoriteRecipes((current) => [...current.filter((item) => item.id !== recipe.id), cached])
-          await cacheFavoriteRecipes(userId, [cached]).catch(() => {})
-        }
-      } 
-    } catch (err) {
-      console.error(err)
+      const favoriteId = `${user.uid}_${recipe.id}`
+      if (saved) {
+        await deleteDoc(doc(db, 'favorites', favoriteId))
+      } else {
+        await setDoc(doc(db, 'favorites', favoriteId), { user_id: user.uid, recipe_id: recipe.id, created_at: new Date().toISOString(), recipe: toCachedRecipe(userId, recipe) })
+      }
+    } catch (error) {
+      // Rollback state if server returns error
+      setFavorites((current) => saved ? [...current, recipe.id] : current.filter((id) => id !== recipe.id))
+      if (!saved) {
+        setFavoriteRecipes((current) => current.filter((item) => item.id !== recipe.id))
+        await setCachedFavorite(userId, recipe.id, false).catch(() => {})
+      } else {
+        const cached = toCachedRecipe(userId, recipe)
+        setFavoriteRecipes((current) => [...current.filter((item) => item.id !== recipe.id), cached])
+        await cacheFavoriteRecipes(userId, [cached]).catch(() => {})
+      }
+      console.error(error)
     }
   }
 
@@ -407,7 +404,7 @@ export function RecipeHome({ recipes, email, userId }: { recipes: Recipe[]; emai
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {visible.map((recipe) => { 
               const saved = favorites.includes(recipe.id)
-              const cardImage = recipe.image_url ?? recipe.imageUrl
+              const cardImage = 'image_url' in recipe ? recipe.image_url : recipe.imageUrl ?? recipe.imageUrl
               const recipeCategory = categories.find(c => c.id === (recipe.category_id ?? recipe.categoryId))
 
               // Safe extraction of display cover image from single-URL or multiple-images JSON array

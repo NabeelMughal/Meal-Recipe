@@ -1,5 +1,3 @@
-'use client'
-
 import { auth, db } from './firebase'
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updatePassword, updateProfile } from 'firebase/auth'
 import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, orderBy, query, setDoc, updateDoc, where } from 'firebase/firestore'

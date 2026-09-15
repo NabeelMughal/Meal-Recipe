@@ -24,7 +24,7 @@ export function AccountForm({ email, initialName, userId }: { email: string; ini
     setBusy(true)
     const firebase = createClient()
     const { data: { user } } = await firebase.auth.getUser()
-    if (user) await firebase.from('profiles').upsert({ id: user.id, full_name: name.trim() || null })
+    if (user) await firebase.from('profiles').upsert({ id: user.uid, full_name: name.trim() || null })
     setBusy(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 1800)
