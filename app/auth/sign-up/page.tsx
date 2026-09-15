@@ -3,11 +3,12 @@
 import { FormEvent, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth'
+import { auth } from '@/lib/firebase'
 
 export default function SignUpPage() {
   const router = useRouter(); const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [name, setName] = useState(''); const [message, setMessage] = useState(''); const [busy, setBusy] = useState(false)
-  async function submit(event: FormEvent) { event.preventDefault(); setBusy(true); setMessage(''); const { error } = await createClient().auth.signUp({ email, password, options: { data: { full_name: name }, emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || `${window.location.origin}/auth/callback` } }); setBusy(false); if (error) { setMessage(error.message.toLowerCase().includes('already') ? 'An account with that email already exists.' : 'Unable to create your account. Please check your details.'); return } router.push('/auth/sign-up-success') }
+  async function submit(event: FormEvent) { event.preventDefault(); setBusy(true); setMessage(''); try { const credential = await createUserWithEmailAndPassword(auth, email, password); await updateProfile(credential.user, { displayName: name }); router.push('/auth/sign-up-success') } catch (error: any) { setMessage(error?.code === 'auth/email-already-in-use' ? 'An account with that email already exists.' : 'Unable to create your account. Please check your details.') } finally { setBusy(false) } }
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-4 py-6 sm:py-10 text-foreground overflow-x-hidden">
       <section className="w-full max-w-md rounded-3xl border border-border bg-card p-6 sm:p-10 shadow-sm transition-all duration-300">

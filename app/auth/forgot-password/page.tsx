@@ -1,7 +1,8 @@
 'use client'
 
 import { FormEvent, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { sendPasswordResetEmail } from 'firebase/auth'
+import { auth } from '@/lib/firebase'
 import Link from 'next/link'
 import { ArrowLeft, Loader2, MailCheck } from 'lucide-react'
 
@@ -16,15 +17,11 @@ export default function ForgotPasswordPage() {
     setBusy(true)
     setMessage('')
     
-    const supabase = createClient()
-    const redirectToUrl = `${window.location.origin}/auth/reset-password`
-    
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: redirectToUrl,
+      await sendPasswordResetEmail(auth, email, {
+        url: `${window.location.origin}/auth/reset-password`,
+        handleCodeInApp: true,
       })
-
-      if (error) throw error
       setSuccess(true)
     } catch (err: any) {
       console.error(err)

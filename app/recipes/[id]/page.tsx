@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { ArrowLeft, Clock, ChefHat, Users } from 'lucide-react'
 import { RecipeActions } from '@/components/recipe-actions'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/firebase-client'
 import { InteractiveIngredients } from '@/components/interactive-ingredients'
 import { ImageSlideshow } from '@/components/image-slideshow'
 
@@ -19,7 +19,7 @@ export default async function RecipePage({ params }: { params: Promise<{ id: str
       .from('recipes')
       .select('*, ingredients(*), instructions(*), categories(name)')
       .eq('id', id)
-      .eq('user_id', user.id)
+      .eq('user_id', user.uid)
       .maybeSingle()
     
     if (!error) {
@@ -34,7 +34,7 @@ export default async function RecipePage({ params }: { params: Promise<{ id: str
       .from('recipes')
       .select('*, ingredients(*), instructions(*)')
       .eq('id', id)
-      .eq('user_id', user.id)
+      .eq('user_id', user.uid)
       .maybeSingle()
     recipe = data
   }
@@ -44,7 +44,7 @@ export default async function RecipePage({ params }: { params: Promise<{ id: str
   // Track recently viewed in a try-catch block to avoid crashing on schema mismatch
   try {
     await supabase.from('recently_viewed').upsert(
-      { user_id: user.id, recipe_id: id, viewed_at: new Date().toISOString() }, 
+      { user_id: user.uid, recipe_id: id, viewed_at: new Date().toISOString() }, 
       { onConflict: 'user_id,recipe_id' }
     )
   } catch (err) {

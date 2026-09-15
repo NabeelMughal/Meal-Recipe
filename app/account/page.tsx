@@ -1,11 +1,30 @@
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/firebase-client'
 import { AccountForm } from '@/components/account-form'
 
-export default async function AccountPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/?auth=login')
-  const { data: profile } = await supabase.from('profiles').select('full_name, avatar_url').eq('id', user.id).maybeSingle()
-  return <AccountForm email={user.email ?? ''} initialName={profile?.full_name ?? ''} userId={user.id} />
+export default function AccountPage() {
+  const router = useRouter()
+  const [account, setAccount] = useState<{ email: string; userId: string; name: string } | null>(null)
+
+  useEffect(() => {
+    let active = true
+    async function loadAccount() {
+      const firebase = createClient()
+      const { data: { user } } = await firebase.auth.getUser()
+      if (!user) {
+        router.replace('/?auth=login')
+        return
+      }
+      const { data: profile } = await firebase.from('profiles').select('full_name').eq('id', user.uid).maybeSingle()
+      if (active) setAccount({ email: user.email ?? '', userId: user.uid, name: profile?.full_name ?? '' })
+    }
+    loadAccount()
+    return () => { active = false }
+  }, [router])
+
+  if (!account) return <div className="min-h-screen bg-background" />
+  return <AccountForm email={account.email} initialName={account.name} userId={account.userId} />
 }

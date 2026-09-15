@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { createClient } from '@/lib/firebase-client'
 import { ArrowLeft, Check, LogOut, Save, Trash2, Loader2 } from 'lucide-react'
 import { clearOfflineData } from '@/lib/offline-db'
 
@@ -22,9 +22,9 @@ export function AccountForm({ email, initialName, userId }: { email: string; ini
 
   async function save() {
     setBusy(true)
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) await supabase.from('profiles').upsert({ id: user.id, full_name: name.trim() || null })
+    const firebase = createClient()
+    const { data: { user } } = await firebase.auth.getUser()
+    if (user) await firebase.from('profiles').upsert({ id: user.uid, full_name: name.trim() || null })
     setBusy(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 1800)
@@ -48,10 +48,10 @@ export function AccountForm({ email, initialName, userId }: { email: string; ini
       return
     }
 
-    const supabase = createClient()
+    const firebase = createClient()
     try {
       // 1. Verify old password by attempting a silent sign-in check
-      const { error: signInError } = await supabase.auth.signInWithPassword({
+      const { error: signInError } = await firebase.auth.signInWithPassword({
         email: email,
         password: oldPassword,
       })
@@ -61,7 +61,7 @@ export function AccountForm({ email, initialName, userId }: { email: string; ini
       }
 
       // 2. Perform the actual password change
-      const { error: updateError } = await supabase.auth.updateUser({
+      const { error: updateError } = await firebase.auth.updateUser({
         password: newPassword,
       })
 

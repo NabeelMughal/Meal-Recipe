@@ -3,7 +3,7 @@
 import { FormEvent, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { createClient } from '@/lib/firebase-client'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -13,7 +13,7 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false)
   async function submit(event: FormEvent) {
     event.preventDefault()
-    if ((event.nativeEvent as SubmitEvent).isComposing || (event as any).keyCode === 229) return
+    if ((event.nativeEvent as any).isComposing || (event as any).keyCode === 229) return
     setBusy(true); setMessage('')
     const { error } = await createClient().auth.signInWithPassword({ email, password })
     setBusy(false)

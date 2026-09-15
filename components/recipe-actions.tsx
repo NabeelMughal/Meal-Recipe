@@ -4,7 +4,8 @@ import { useState } from 'react'
 import { Copy, Download, Printer, Share2, Edit, Trash2, Check, Loader2, BookOpen, X } from 'lucide-react'
 import { pdf, Document, Page, Text, Image, View, StyleSheet } from '@react-pdf/renderer'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { deleteDoc, doc } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
 import Link from 'next/link'
 import { FullScreenLoading } from './full-screen-loading'
 
@@ -172,8 +173,7 @@ export function RecipeActions({
     if (!window.confirm('Delete this recipe? This cannot be undone.')) return
     setDeleteBusy(true)
     try {
-      const { error } = await createClient().from('recipes').delete().eq('id', recipeId)
-      if (error) throw new Error(error.message)
+      await deleteDoc(doc(db, 'recipes', recipeId))
       router.push('/')
       router.refresh()
     } catch (err: any) {

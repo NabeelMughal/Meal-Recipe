@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/firebase-client'
 import { RecipeEditor } from '@/components/recipe-editor'
 
 export default async function NewRecipePage() {

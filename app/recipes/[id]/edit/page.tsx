@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/firebase-client'
 import { RecipeEditor } from '@/components/recipe-editor'
 import { ArrowLeft } from 'lucide-react'
 
@@ -15,7 +15,7 @@ export default async function EditRecipePage({ params }: { params: Promise<{ id:
     .from('recipes')
     .select('*, ingredients(*), instructions(*)')
     .eq('id', id)
-    .eq('user_id', user.id)
+    .eq('user_id', user.uid)
     .maybeSingle()
 
   if (!recipe) notFound()

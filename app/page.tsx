@@ -1,22 +1,35 @@
-import { createClient } from '@/lib/supabase/server'
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/firebase-client'
 import { RecipeHome } from '@/components/recipe-home'
 import { listRecipes } from '@/lib/recipes'
-import { redirect } from 'next/navigation'
-import { Suspense } from 'react'
 
-export default async function Page() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/auth/login')
-  const recipes = await listRecipes()
-  
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-background text-muted-foreground text-sm font-sans">
-        Loading cookbook...
-      </div>
-    }>
-      <RecipeHome recipes={recipes} email={user.email ?? 'Your kitchen'} userId={user.id} />
-    </Suspense>
-  )
+export default function Page() {
+  const router = useRouter()
+  const [account, setAccount] = useState<{ email: string; userId: string } | null>(null)
+  const [recipes, setRecipes] = useState<any[]>([])
+
+  useEffect(() => {
+    let active = true
+    async function load() {
+      const firebase = createClient()
+      const { data: { user } } = await firebase.auth.getUser()
+      if (!user) {
+        router.replace('/auth/login')
+        return
+      }
+      const items = await listRecipes()
+      if (active) {
+        setAccount({ email: user.email ?? 'Your kitchen', userId: user.uid })
+        setRecipes(items)
+      }
+    }
+    load()
+    return () => { active = false }
+  }, [router])
+
+  if (!account) return <div className="min-h-screen bg-background" />
+  return <RecipeHome recipes={recipes} email={account.email} userId={account.userId} />
 }

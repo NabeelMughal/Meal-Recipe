@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { auth, db } from '@/lib/firebase'
+import { addDoc, collection, deleteDoc, doc, getDocs, orderBy, query, setDoc, where } from 'firebase/firestore'
 import { Plus, Trash2, Edit2, Check, X, Loader2 } from 'lucide-react'
 import { listCachedCategories, setCachedCategory, deleteCachedCategory } from '@/lib/offline-db'
 
@@ -39,29 +40,23 @@ export function CategoryManager({ isOpen, onClose, onChanged }: Props) {
   async function loadCategories() {
     setLoading(true)
     setErrorMsg('')
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = auth.currentUser
     if (!user) {
       setLoading(false)
       return
     }
 
     if (!navigator.onLine) {
-      const cached = await listCachedCategories(user.id)
+      const cached = await listCachedCategories(user.uid)
       setCategories(cached.map(c => ({ id: c.id, name: c.name, user_id: c.userId, created_at: new Date(c.createdAt).toISOString() })))
       setLoading(false)
       return
     }
 
     try {
-      const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('name', { ascending: true })
-
-      if (error) throw new Error(error.message)
-      setCategories(data ?? [])
+      const snapshot = await getDocs(query(collection(db, 'categories'), where('user_id', '==', user.uid), orderBy('name', 'asc')))
+      const data = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })) as Category[]
+      setCategories(data)
     } catch (err: any) {
       setErrorMsg('Failed to load categories.')
       console.error(err)
@@ -76,22 +71,17 @@ export function CategoryManager({ isOpen, onClose, onChanged }: Props) {
     setCreateLoading(true)
     setErrorMsg('')
     try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
+      const user = auth.currentUser
       if (!user) throw new Error('Authentication required')
-
-      const { data, error } = await supabase
-        .from('categories')
-        .insert({ user_id: user.id, name: newCategoryName.trim() })
-        .select()
-        .single()
-
-      if (error || !data) throw new Error(error?.message ?? 'Failed to create category')
+      const createdAt = new Date().toISOString()
+      const category = { user_id: user.uid, name: newCategoryName.trim(), created_at: createdAt }
+      const ref = await addDoc(collection(db, 'categories'), category)
+      const data = { id: ref.id, ...category } as Category
 
       // Cache offline
-      await setCachedCategory(user.id, {
+      await setCachedCategory(user.uid, {
         id: data.id,
-        userId: user.id,
+        userId: user.uid,
         name: data.name,
         createdAt: new Date(data.created_at).getTime()
       })
@@ -111,24 +101,16 @@ export function CategoryManager({ isOpen, onClose, onChanged }: Props) {
     setActionId(id)
     setErrorMsg('')
     try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
+      const user = auth.currentUser
       if (!user) throw new Error('Authentication required')
-
-      const { data, error } = await supabase
-        .from('categories')
-        .update({ name: editingName.trim() })
-        .eq('id', id)
-        .eq('user_id', user.id)
-        .select()
-        .single()
-
-      if (error || !data) throw new Error(error?.message ?? 'Failed to update category')
+      const data = { ...categories.find((category) => category.id === id), name: editingName.trim() } as Category
+      if (data.user_id !== user.uid) throw new Error('Category not found')
+      await setDoc(doc(db, 'categories', id), { name: data.name }, { merge: true })
 
       // Cache offline
-      await setCachedCategory(user.id, {
+      await setCachedCategory(user.uid, {
         id: data.id,
-        userId: user.id,
+        userId: user.uid,
         name: data.name,
         createdAt: new Date(data.created_at).getTime()
       })
@@ -148,20 +130,14 @@ export function CategoryManager({ isOpen, onClose, onChanged }: Props) {
     setActionId(id)
     setErrorMsg('')
     try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
+      const user = auth.currentUser
       if (!user) throw new Error('Authentication required')
-
-      const { error } = await supabase
-        .from('categories')
-        .delete()
-        .eq('id', id)
-        .eq('user_id', user.id)
-
-      if (error) throw new Error(error.message)
+      const category = categories.find((item) => item.id === id)
+      if (!category || category.user_id !== user.uid) throw new Error('Category not found')
+      await deleteDoc(doc(db, 'categories', id))
 
       // Delete offline
-      await deleteCachedCategory(user.id, id)
+      await deleteCachedCategory(user.uid, id)
 
       setCategories((prev) => prev.filter(c => c.id !== id))
       onChanged()

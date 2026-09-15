@@ -1,7 +1,8 @@
 'use client'
 
 import { FormEvent, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { updatePassword } from 'firebase/auth'
+import { auth } from '@/lib/firebase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Check, Loader2 } from 'lucide-react'
@@ -32,12 +33,8 @@ export default function ResetPasswordPage() {
     }
 
     try {
-      const supabase = createClient()
-      const { error } = await supabase.auth.updateUser({
-        password: password,
-      })
-
-      if (error) throw error
+      if (!auth.currentUser) throw new Error('Authentication required')
+      await updatePassword(auth.currentUser, password)
       setSuccess(true)
       setTimeout(() => {
         router.push('/')
