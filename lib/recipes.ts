@@ -41,7 +41,8 @@ export async function listRecipes(userId?: string) {
   let recipes: any[]
   try {
     const snapshot = await getDocs(query(collection(db, 'recipes'), where('user_id', '==', user.uid), orderBy('created_at', 'desc')))
-    recipes = recipeData(snapshot)
+    // An empty collection is a valid result, not a loading failure.
+    recipes = snapshot.empty ? [] : recipeData(snapshot)
   } catch (error: any) {
     console.error('Failed to load ordered recipes:', {
       code: error?.code ?? 'unknown',

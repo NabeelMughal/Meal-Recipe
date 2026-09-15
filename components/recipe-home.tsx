@@ -387,10 +387,10 @@ export function RecipeHome({ recipes, email, userId }: { recipes: Recipe[]; emai
 
         {visible.length === 0 ? (
           <div className="py-24 text-center rounded-3xl border border-dashed border-border bg-muted/20 animate-in fade-in duration-300">
-            <p className="font-serif text-2xl sm:text-3xl text-muted-foreground">{offline ? 'No saved recipes offline.' : 'No recipes found.'}</p>
-            <p className="mt-3 text-sm text-muted-foreground max-w-md mx-auto">
-              {offline ? 'Reconnect to sync favorites for your next kitchen session.' : 'Add a recipe or clear filters to discover more cooking ideas.'}
-            </p>
+<p className="font-serif text-2xl sm:text-3xl text-muted-foreground">{offline ? 'No saved recipes offline.' : 'No recipes found. Add your first recipe!'}</p>
+  <p className="mt-3 text-sm text-muted-foreground max-w-md mx-auto">
+  {offline ? 'Reconnect to sync favorites for your next kitchen session.' : 'Keep your favorite dishes, ingredients, and instructions in one calm place.'}
+  </p>
             {!offline && (
               <Link 
                 href="/recipes/new" 

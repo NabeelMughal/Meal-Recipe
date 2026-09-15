@@ -26,7 +26,11 @@ export default function Page() {
 
     listRecipes(user.uid)
       .then((items) => {
-        if (active) setRecipes(items)
+        if (!active) return
+        // Zero recipes is a successful response; keep the dashboard mounted
+        // so RecipeHome can render its empty state and creation action.
+        setRecipes(Array.isArray(items) ? items : [])
+        setLoadError('')
       })
       .catch((error: any) => {
         console.error('Failed to load recipes:', {
