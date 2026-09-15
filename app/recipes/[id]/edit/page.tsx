@@ -6,12 +6,12 @@ import { ArrowLeft } from 'lucide-react'
 
 export default async function EditRecipePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const firebase = await createClient()
+  const { data: { user } } = await firebase.auth.getUser()
   if (!user) redirect('/?auth=login')
 
   // Fetch recipe along with ingredients and instructions
-  const { data: recipe } = await supabase
+  const { data: recipe } = await firebase
     .from('recipes')
     .select('*, ingredients(*), instructions(*)')
     .eq('id', id)

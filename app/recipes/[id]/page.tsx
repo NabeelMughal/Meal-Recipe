@@ -8,14 +8,14 @@ import { ImageSlideshow } from '@/components/image-slideshow'
 
 export default async function RecipePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const firebase = await createClient()
+  const { data: { user } } = await firebase.auth.getUser()
   if (!user) redirect('/?auth=login')
 
   // Safe database query to fetch recipe, ingredients, instructions, and joined category
   let recipe: any = null
   try {
-    const { data, error } = await supabase
+    const { data, error } = await firebase
       .from('recipes')
       .select('*, ingredients(*), instructions(*), categories(name)')
       .eq('id', id)
@@ -30,7 +30,7 @@ export default async function RecipePage({ params }: { params: Promise<{ id: str
   } catch (err) {
     console.warn('Could not load joined categories schema, trying recipe-only fallback...', err)
     // Fallback if categories join isn't migrated in the db yet
-    const { data } = await supabase
+    const { data } = await firebase
       .from('recipes')
       .select('*, ingredients(*), instructions(*)')
       .eq('id', id)
@@ -43,7 +43,7 @@ export default async function RecipePage({ params }: { params: Promise<{ id: str
 
   // Track recently viewed in a try-catch block to avoid crashing on schema mismatch
   try {
-    await supabase.from('recently_viewed').upsert(
+    await firebase.from('recently_viewed').upsert(
       { user_id: user.uid, recipe_id: id, viewed_at: new Date().toISOString() }, 
       { onConflict: 'user_id,recipe_id' }
     )
