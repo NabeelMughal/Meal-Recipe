@@ -12,6 +12,7 @@ export default function Page() {
   const { user, authLoading } = useAuthGuard()
   const [recipes, setRecipes] = useState<any[]>([])
   const [loadError, setLoadError] = useState('')
+  const [retryCount, setRetryCount] = useState(0)
 
   useEffect(() => {
     if (authLoading) return
@@ -22,17 +23,21 @@ export default function Page() {
 
     let active = true
     setLoadError('')
-    listRecipes()
+
+    listRecipes(user.uid)
       .then((items) => {
         if (active) setRecipes(items)
       })
-      .catch((error: unknown) => {
-        console.error('Failed to load recipes:', error)
+      .catch((error: any) => {
+        console.error('Failed to load recipes:', {
+          code: error?.code ?? 'unknown',
+          message: error?.message ?? String(error),
+        })
         if (active) setLoadError('We could not load your recipes. Please try again.')
       })
 
     return () => { active = false }
-  }, [authLoading, router, user])
+  }, [authLoading, router, retryCount, user])
 
   if (authLoading || !user) {
     return <FullScreenLoading show message="Restoring your kitchen..." />
@@ -46,7 +51,10 @@ export default function Page() {
           <p className="text-muted-foreground">{loadError}</p>
           <button
             type="button"
-            onClick={() => window.location.reload()}
+            onClick={() => {
+              setLoadError('')
+              setRetryCount((count) => count + 1)
+            }}
             className="rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground"
           >
             Try again
