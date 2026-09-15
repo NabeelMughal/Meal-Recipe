@@ -1,189 +1,43 @@
+'use client'
+
 import Link from 'next/link'
-import { notFound, redirect } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import { ArrowLeft, Clock, ChefHat, Users } from 'lucide-react'
 import { RecipeActions } from '@/components/recipe-actions'
-import { createClient } from '@/lib/firebase-client'
 import { InteractiveIngredients } from '@/components/interactive-ingredients'
 import { ImageSlideshow } from '@/components/image-slideshow'
+import { FullScreenLoading } from '@/components/full-screen-loading'
+import { useAuthGuard } from '@/lib/use-auth-guard'
+import { createClient } from '@/lib/firebase-client'
 
-export default async function RecipePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  const firebase = await createClient()
-  const { data: { user } } = await firebase.auth.getUser()
-  if (!user) redirect('/?auth=login')
+export default function RecipePage() {
+  const { id } = useParams<{ id: string }>()
+  const router = useRouter()
+  const { user, authLoading } = useAuthGuard()
+  const [recipe, setRecipe] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
 
-  // Safe database query to fetch recipe, ingredients, instructions, and joined category
-  let recipe: any = null
-  try {
-    const { data, error } = await firebase
-      .from('recipes')
-      .select('*, ingredients(*), instructions(*), categories(name)')
-      .eq('id', id)
-      .eq('user_id', user.uid)
-      .maybeSingle()
-    
-    if (!error) {
-      recipe = data
-    } else {
-      throw error
-    }
-  } catch (err) {
-    console.warn('Could not load joined categories schema, trying recipe-only fallback...', err)
-    // Fallback if categories join isn't migrated in the db yet
-    const { data } = await firebase
-      .from('recipes')
-      .select('*, ingredients(*), instructions(*)')
-      .eq('id', id)
-      .eq('user_id', user.uid)
-      .maybeSingle()
-    recipe = data
-  }
+  useEffect(() => {
+    if (authLoading || !user || !id) return
+    const firebase = createClient()
+    firebase.from('recipes').select('*, ingredients(*), instructions(*), categories(name)').eq('id', id).eq('user_id', user.uid).maybeSingle().then(async ({ data, error }: { data: any; error: any }) => {
+      if (error) {
+        const fallback = await firebase.from('recipes').select('*, ingredients(*), instructions(*)').eq('id', id).eq('user_id', user.uid).maybeSingle()
+        setRecipe(fallback.data)
+      } else setRecipe(data)
+      setLoading(false)
+    })
+  }, [authLoading, id, user])
 
-  if (!recipe) notFound()
+  if (authLoading || loading) return <FullScreenLoading show message="Opening recipe..." />
+  if (!user) return <main className="flex min-h-screen items-center justify-center bg-background px-5 text-center"><div><h1 className="font-serif text-4xl">Sign in to view recipes.</h1><button onClick={() => router.push('/?auth=login')} className="mt-6 rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground">Go to sign in</button></div></main>
+  if (!recipe) return <main className="flex min-h-screen items-center justify-center bg-background"><div className="text-center"><h1 className="font-serif text-4xl">Recipe not found.</h1><Link href="/" className="mt-6 inline-block text-sm text-primary">Back to cookbook</Link></div></main>
 
-  // Track recently viewed in a try-catch block to avoid crashing on schema mismatch
-  try {
-    await firebase.from('recently_viewed').upsert(
-      { user_id: user.uid, recipe_id: id, viewed_at: new Date().toISOString() }, 
-      { onConflict: 'user_id,recipe_id' }
-    )
-  } catch (err) {
-    console.error('Failed to log recently viewed history:', err)
-  }
+  const ingredients = [...(recipe.ingredients ?? [])].sort((a: any, b: any) => a.position - b.position)
+  const instructions = [...(recipe.instructions ?? [])].sort((a: any, b: any) => a.position - b.position)
+  const categoryName = Array.isArray(recipe.categories) ? recipe.categories[0]?.name : recipe.categories?.name
+  const images = recipe.image_url?.startsWith('[') ? JSON.parse(recipe.image_url) : recipe.image_url ? [recipe.image_url] : []
 
-  const ingredients = [...(recipe.ingredients ?? [])].sort((a, b) => a.position - b.position)
-  const instructions = [...(recipe.instructions ?? [])].sort((a, b) => a.position - b.position)
-  
-  // Extract category name
-  const categoryName = recipe.categories 
-    ? (Array.isArray(recipe.categories) ? recipe.categories[0]?.name : recipe.categories.name) 
-    : null
-
-  // Parse multiple images JSON array (backward-compatible)
-  let images: string[] = []
-  if (recipe.image_url) {
-    if (recipe.image_url.startsWith('[')) {
-      try {
-        images = JSON.parse(recipe.image_url)
-      } catch (e) {
-        images = [recipe.image_url]
-      }
-    } else {
-      images = [recipe.image_url]
-    }
-  }
-
-  return (
-    <main className="min-h-screen bg-background text-foreground transition-colors duration-300">
-      
-      {/* Responsive Header */}
-      <header className="mx-auto flex max-w-5xl items-center justify-between px-5 py-6 sm:px-10 border-b border-border/30">
-        <Link 
-          href="/" 
-          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors duration-200"
-        >
-          <ArrowLeft size={16} /> 
-          <span>Cookbook</span>
-        </Link>
-        
-        <Link href="/" className="font-serif text-2xl tracking-tight">
-          crumb<span className="text-primary">.</span>
-        </Link>
-      </header>
-
-      {/* Main Content Article */}
-      <article className="mx-auto max-w-5xl px-5 pb-24 pt-8 sm:px-10 animate-in fade-in duration-500">
-        
-        {/* Metadata & Badges */}
-        <div className="flex flex-wrap items-center gap-3">
-          {categoryName && (
-            <span className="px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold uppercase tracking-wider font-mono">
-              {categoryName}
-            </span>
-          )}
-          
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium bg-muted/60 px-3 py-1 rounded-full border border-border/45">
-            <ChefHat size={12} />
-            <span className="capitalize">{recipe.difficulty} level</span>
-          </div>
-
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium bg-muted/60 px-3 py-1 rounded-full border border-border/45">
-            <Clock size={12} />
-            <span>{recipe.preparation_time + recipe.cooking_time} min</span>
-          </div>
-
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium bg-muted/60 px-3 py-1 rounded-full border border-border/45">
-            <Users size={12} />
-            <span>Serves {recipe.servings}</span>
-          </div>
-        </div>
-
-        {/* Recipe Title with Responsive Typography */}
-        <h1 className="mt-5 font-serif text-4xl sm:text-5xl lg:text-6xl tracking-tight leading-tight text-balance">
-          {recipe.title}
-        </h1>
-
-        {recipe.description && (
-          <p className="mt-4 max-w-3xl text-base sm:text-lg leading-relaxed text-muted-foreground font-light">
-            {recipe.description}
-          </p>
-        )}
-
-        {/* Unified actions toolbar (Edit, Delete, PDF, print, etc.) */}
-        <div className="mt-8 border-y border-border/60 py-4 max-w-full">
-          <RecipeActions 
-            recipeId={recipe.id}
-            title={recipe.title} 
-            description={recipe.description} 
-            ingredients={ingredients} 
-            instructions={instructions} 
-            prep={recipe.preparation_time}
-            cook={recipe.cooking_time}
-            servings={recipe.servings}
-            difficulty={recipe.difficulty}
-            imageUrl={recipe.image_url}
-          />
-        </div>
-
-        {/* Hero Image Slideshow Section */}
-        <ImageSlideshow images={images} />
-
-        {/* Split Grid for Ingredients and Method */}
-        <div className="mt-12 grid gap-12 lg:grid-cols-[0.9fr_1.1fr] border-t border-border/20 pt-10">
-          
-          {/* Ingredients Column */}
-          <section className="animate-in fade-in duration-500 delay-150">
-            <h2 className="font-serif text-2xl sm:text-3xl tracking-tight flex items-center justify-between border-b border-border pb-3">
-              <span>Ingredients</span>
-              <span className="text-xs font-sans text-muted-foreground font-normal">Click to cross off items</span>
-            </h2>
-            <InteractiveIngredients ingredients={ingredients} />
-          </section>
-
-          {/* Method / Instructions Column */}
-          <section className="animate-in fade-in duration-500 delay-300">
-            <h2 className="font-serif text-2xl sm:text-3xl tracking-tight border-b border-border pb-3 mb-5">
-              Method
-            </h2>
-            
-            <ol className="flex flex-col gap-6">
-              {instructions.map((item, index) => (
-                <li key={item.id} className="flex gap-4 items-start pb-5 border-b border-border/20 last:border-0">
-                  <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground shadow-sm">
-                    {index + 1}
-                  </span>
-                  <div className="flex flex-col gap-1">
-                    <p className="leading-relaxed text-sm sm:text-base text-foreground/90">
-                      {item.instruction}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </section>
-
-        </div>
-      </article>
-    </main>
-  )
+  return <main className="min-h-screen bg-background text-foreground"><header className="mx-auto flex max-w-5xl items-center justify-between border-b border-border/30 px-5 py-6 sm:px-10"><Link href="/" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft size={16} /> Cookbook</Link><Link href="/" className="font-serif text-2xl">crumb<span className="text-primary">.</span></Link></header><article className="mx-auto max-w-5xl px-5 pb-24 pt-8 sm:px-10"><div className="flex flex-wrap items-center gap-3">{categoryName && <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-primary">{categoryName}</span>}<span className="flex items-center gap-1.5 rounded-full border border-border/45 bg-muted/60 px-3 py-1 text-xs text-muted-foreground"><ChefHat size={12} /> <span className="capitalize">{recipe.difficulty} level</span></span><span className="flex items-center gap-1.5 rounded-full border border-border/45 bg-muted/60 px-3 py-1 text-xs text-muted-foreground"><Clock size={12} /> {recipe.preparation_time + recipe.cooking_time} min</span><span className="flex items-center gap-1.5 rounded-full border border-border/45 bg-muted/60 px-3 py-1 text-xs text-muted-foreground"><Users size={12} /> Serves {recipe.servings}</span></div><h1 className="mt-5 font-serif text-4xl tracking-tight sm:text-6xl">{recipe.title}</h1>{recipe.description && <p className="mt-4 max-w-3xl text-lg leading-relaxed text-muted-foreground">{recipe.description}</p>}<div className="mt-8 border-y border-border/60 py-4"><RecipeActions recipeId={recipe.id} title={recipe.title} description={recipe.description} ingredients={ingredients} instructions={instructions} prep={recipe.preparation_time} cook={recipe.cooking_time} servings={recipe.servings} difficulty={recipe.difficulty} imageUrl={recipe.image_url} /></div><ImageSlideshow images={images} /><div className="mt-12 grid gap-12 border-t border-border/20 pt-10 lg:grid-cols-[0.9fr_1.1fr]"><section><h2 className="border-b border-border pb-3 font-serif text-3xl">Ingredients</h2><InteractiveIngredients ingredients={ingredients} /></section><section><h2 className="mb-5 border-b border-border pb-3 font-serif text-3xl">Method</h2><ol className="flex flex-col gap-6">{instructions.map((item: any, index: number) => <li key={item.id ?? index} className="flex gap-4 border-b border-border/20 pb-5 last:border-0"><span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">{index + 1}</span><p className="leading-relaxed">{item.instruction}</p></li>)}</ol></section></div></article></main>
 }
