@@ -1,0 +1,47 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: var(--font-body), sans-serif;
+  --font-serif: var(--font-display), serif;
+  --font-mono: ui-monospace, monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.5rem;
+  --radius-3xl: 2rem;
+}
+
+:root { color-scheme: light; --background: oklch(0.97 0.012 90); --foreground: oklch(0.22 0.025 75); --card: oklch(0.99 0.008 90); --primary: oklch(0.43 0.105 48); --primary-foreground: oklch(0.98 0.01 90); --muted: oklch(0.93 0.018 88); --muted-foreground: oklch(0.5 0.035 72); --border: oklch(0.87 0.025 84); --input: oklch(0.84 0.03 84); --ring: oklch(0.55 0.12 48); --destructive: oklch(0.52 0.18 28); }
+.dark { color-scheme: dark; --background: oklch(0.18 0.015 75); --foreground: oklch(0.94 0.02 86); --card: oklch(0.22 0.018 75); --primary: oklch(0.72 0.12 65); --primary-foreground: oklch(0.2 0.02 70); --muted: oklch(0.27 0.02 75); --muted-foreground: oklch(0.7 0.035 80); --border: oklch(0.34 0.025 75); --input: oklch(0.38 0.025 75); --ring: oklch(0.7 0.12 65); --destructive: oklch(0.65 0.16 25); }
+
+@layer base { * { @apply border-border outline-ring/50; } body { @apply bg-background text-foreground font-sans; } }
+
+@layer components {
+  .field-label { @apply mb-2 block text-sm font-medium text-foreground; }
+  .field-input { @apply w-full rounded-xl border border-input bg-card px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-ring/30; }
+}
+
+.eyebrow { @apply font-mono text-xs uppercase tracking-[0.22em] text-primary; }
+
+@media print {
+  header, button, a[href='/'] { display: none !important; }
+  main, article { min-height: auto !important; }
+  body { background: white !important; color: black !important; }
+  h1 { font-size: 32pt !important; }
+  section { break-inside: avoid; }
+}
