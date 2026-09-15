@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { BookOpen, Heart, Plus, Tag, User } from 'lucide-react'
 
-function MobileNavContent() {
+function MobileNavContent() { 
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
