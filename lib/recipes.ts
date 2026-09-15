@@ -34,11 +34,29 @@ async function related(recipeId: string) {
   }
 }
 
-export async function listRecipes() {
+export async function listRecipes(userId?: string) {
   const user = auth.currentUser
-  if (!user) return []
-  const snapshot = await getDocs(query(collection(db, 'recipes'), where('user_id', '==', user.uid), orderBy('created_at', 'desc')))
-  return Promise.all(recipeData(snapshot).map(async (recipe: any) => ({ ...recipe, ...(await related(recipe.id)) })))
+  if (!user || (userId && user.uid !== userId)) return []
+
+  let recipes: any[]
+  try {
+    const snapshot = await getDocs(query(collection(db, 'recipes'), where('user_id', '==', user.uid), orderBy('created_at', 'desc')))
+    recipes = recipeData(snapshot)
+  } catch (error: any) {
+    console.error('Failed to load ordered recipes:', {
+      code: error?.code ?? 'unknown',
+      message: error?.message ?? String(error),
+    })
+
+    const fallbackSnapshot = await getDocs(query(collection(db, 'recipes'), where('user_id', '==', user.uid)))
+    recipes = recipeData(fallbackSnapshot).sort((a: any, b: any) => {
+      const left = a.created_at ? new Date(a.created_at).getTime() : 0
+      const right = b.created_at ? new Date(b.created_at).getTime() : 0
+      return right - left
+    })
+  }
+
+  return Promise.all(recipes.map(async (recipe: any) => ({ ...recipe, ...(await related(recipe.id)) })))
 }
 
 export async function getRecipe(id: string) {
