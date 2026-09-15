@@ -21,13 +21,13 @@ self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);
 
-  // Only handle GET requests inside our own origin, ignoring api, auth, and supabase
+  // Only handle GET requests inside our own origin, ignoring api, auth, and firebase
   if (
     request.method !== 'GET' || 
     url.origin !== self.location.origin || 
     url.pathname.startsWith('/api') || 
     url.pathname.startsWith('/auth') ||
-    url.pathname.includes('/supabase/')
+    url.pathname.includes('/firebase/')
   ) {
     return;
   }

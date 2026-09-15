@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { ArrowLeft, Clock, ChefHat, Users } from 'lucide-react'
 import { RecipeActions } from '@/components/recipe-actions'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/firebase-client'
 import { InteractiveIngredients } from '@/components/interactive-ingredients'
 import { ImageSlideshow } from '@/components/image-slideshow'
 

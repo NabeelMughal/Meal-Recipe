@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/firebase-client'
 import { RecipeHome } from '@/components/recipe-home'
 import { listRecipes } from '@/lib/recipes'
 import { redirect } from 'next/navigation'

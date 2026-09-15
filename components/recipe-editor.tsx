@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, FormEvent } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { createClient } from '@/lib/firebase-client'
 import { useRouter } from 'next/navigation'
 import { Plus, Trash2, Image as ImageIcon, Loader2, X, ArrowLeft } from 'lucide-react'
 import { listCachedCategories } from '@/lib/offline-db'
@@ -140,8 +140,8 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
   // Fetch user categories
   useEffect(() => {
     async function load() {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
+      const firebase = createClient()
+      const { data: { user } } = await firebase.auth.getUser()
       if (!user) return
 
       if (!navigator.onLine) {
@@ -151,7 +151,7 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
       }
 
       try {
-        const { data, error } = await supabase.from('categories').select('*').eq('user_id', user.id).order('name', { ascending: true })
+        const { data, error } = await firebase.from('categories').select('*').eq('user_id', user.id).order('name', { ascending: true })
         if (data && !error) {
           setCategories(data)
         }
@@ -173,15 +173,15 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
     setCategoryLoading(true)
     setMessage('')
     try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
+      const firebase = createClient()
+      const { data: { user } } = await firebase.auth.getUser()
       if (!user) {
         setMessage('Auth required.')
         setCategoryLoading(false)
         return
       }
 
-      const { data, error } = await supabase
+      const { data, error } = await firebase
         .from('categories')
         .insert({ user_id: user.id, name: newCategoryName.trim() })
         .select()
@@ -238,8 +238,8 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
     setBusy(true)
     setMessage('')
     
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const firebase = createClient()
+    const { data: { user } } = await firebase.auth.getUser()
     if (!user) { 
       router.push('/?auth=login')
       return 
@@ -262,7 +262,7 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
 
       if (recipe) {
         // UPDATE MODE
-        const { error } = await supabase
+        const { error } = await firebase
           .from('recipes')
           .update(payload)
           .eq('id', recipe.id)
@@ -271,11 +271,11 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
         if (error) throw new Error(error.message)
         
         // Refresh ingredients and instructions
-        await supabase.from('ingredients').delete().eq('recipe_id', recipe.id)
-        await supabase.from('instructions').delete().eq('recipe_id', recipe.id)
+        await firebase.from('ingredients').delete().eq('recipe_id', recipe.id)
+        await firebase.from('instructions').delete().eq('recipe_id', recipe.id)
       } else {
         // CREATE MODE
-        const { data: newRecipe, error } = await supabase
+        const { data: newRecipe, error } = await firebase
           .from('recipes')
           .insert(payload)
           .select()
@@ -307,12 +307,12 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
         }))
 
       if (ingredientRows.length) {
-        const { error: ingError } = await supabase.from('ingredients').insert(ingredientRows)
+        const { error: ingError } = await firebase.from('ingredients').insert(ingredientRows)
         if (ingError) throw ingError
       }
       
       if (instructionRows.length) {
-        const { error: instError } = await supabase.from('instructions').insert(instructionRows)
+        const { error: instError } = await firebase.from('instructions').insert(instructionRows)
         if (instError) throw instError
       }
 

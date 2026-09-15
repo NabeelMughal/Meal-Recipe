@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/firebase-client'
 import { AccountForm } from '@/components/account-form'
 
 export default async function AccountPage() {

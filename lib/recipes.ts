@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/firebase-client'
 
 export type RecipeInput = {
   title: string
@@ -14,27 +14,27 @@ export type RecipeInput = {
 }
 
 export async function listRecipes() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const firebase = await createClient()
+  const { data: { user } } = await firebase.auth.getUser()
   if (!user) return []
-  const { data } = await supabase.from('recipes').select('*, ingredients(*), instructions(*)').eq('user_id', user.id).order('created_at', { ascending: false })
+  const { data } = await firebase.from('recipes').select('*, ingredients(*), instructions(*)').eq('user_id', user.id).order('created_at', { ascending: false })
   return data ?? []
 }
 
 export async function getRecipe(id: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const firebase = await createClient()
+  const { data: { user } } = await firebase.auth.getUser()
   if (!user) return null
-  const { data } = await supabase.from('recipes').select('*, ingredients(*), instructions(*)').eq('id', id).eq('user_id', user.id).maybeSingle()
+  const { data } = await firebase.from('recipes').select('*, ingredients(*), instructions(*)').eq('id', id).eq('user_id', user.id).maybeSingle()
   return data
 }
 
 export async function createRecipe(input: RecipeInput) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const firebase = await createClient()
+  const { data: { user } } = await firebase.auth.getUser()
   if (!user) throw new Error('Authentication required')
   
-  const { data: recipe, error } = await supabase
+  const { data: recipe, error } = await firebase
     .from('recipes')
     .insert({ 
       user_id: user.id, 
@@ -60,18 +60,18 @@ export async function createRecipe(input: RecipeInput) {
     .filter(Boolean)
     .map((instruction, position) => ({ recipe_id: recipe.id, instruction: instruction.trim(), position }))
     
-  if (ingredients.length) await supabase.from('ingredients').insert(ingredients)
-  if (instructions.length) await supabase.from('instructions').insert(instructions)
+  if (ingredients.length) await firebase.from('ingredients').insert(ingredients)
+  if (instructions.length) await firebase.from('instructions').insert(instructions)
   
   return recipe
 }
 
 export async function updateRecipe(id: string, input: RecipeInput) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const firebase = await createClient()
+  const { data: { user } } = await firebase.auth.getUser()
   if (!user) throw new Error('Authentication required')
   
-  const { error: recipeError } = await supabase
+  const { error: recipeError } = await firebase
     .from('recipes')
     .update({
       title: input.title.trim(),
@@ -89,34 +89,34 @@ export async function updateRecipe(id: string, input: RecipeInput) {
   if (recipeError) throw new Error(recipeError.message)
   
   // Re-insert ingredients
-  await supabase.from('ingredients').delete().eq('recipe_id', id)
+  await firebase.from('ingredients').delete().eq('recipe_id', id)
   const ingredients = input.ingredients
     .filter((item) => item.name.trim())
     .map((item, position) => ({ ...item, recipe_id: id, name: item.name.trim(), position }))
-  if (ingredients.length) await supabase.from('ingredients').insert(ingredients)
+  if (ingredients.length) await firebase.from('ingredients').insert(ingredients)
   
   // Re-insert instructions
-  await supabase.from('instructions').delete().eq('recipe_id', id)
+  await firebase.from('instructions').delete().eq('recipe_id', id)
   const instructions = input.instructions
     .filter(Boolean)
     .map((instruction, position) => ({ recipe_id: id, instruction: instruction.trim(), position }))
-  if (instructions.length) await supabase.from('instructions').insert(instructions)
+  if (instructions.length) await firebase.from('instructions').insert(instructions)
 }
 
 export async function deleteRecipe(id: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const firebase = await createClient()
+  const { data: { user } } = await firebase.auth.getUser()
   if (!user) throw new Error('Authentication required')
-  const { error } = await supabase.from('recipes').delete().eq('id', id).eq('user_id', user.id)
+  const { error } = await firebase.from('recipes').delete().eq('id', id).eq('user_id', user.id)
   if (error) throw new Error(error.message)
 }
 
 // Category Operations
 export async function listCategories() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const firebase = await createClient()
+  const { data: { user } } = await firebase.auth.getUser()
   if (!user) return []
-  const { data, error } = await supabase.from('categories').select('*').eq('user_id', user.id).order('name', { ascending: true })
+  const { data, error } = await firebase.from('categories').select('*').eq('user_id', user.id).order('name', { ascending: true })
   if (error) {
     console.error('Error fetching categories:', error.message)
     return []
@@ -125,27 +125,27 @@ export async function listCategories() {
 }
 
 export async function createCategory(name: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const firebase = await createClient()
+  const { data: { user } } = await firebase.auth.getUser()
   if (!user) throw new Error('Authentication required')
-  const { data, error } = await supabase.from('categories').insert({ user_id: user.id, name: name.trim() }).select().single()
+  const { data, error } = await firebase.from('categories').insert({ user_id: user.id, name: name.trim() }).select().single()
   if (error) throw new Error(error.message)
   return data
 }
 
 export async function updateCategory(id: string, name: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const firebase = await createClient()
+  const { data: { user } } = await firebase.auth.getUser()
   if (!user) throw new Error('Authentication required')
-  const { data, error } = await supabase.from('categories').update({ name: name.trim() }).eq('id', id).eq('user_id', user.id).select().single()
+  const { data, error } = await firebase.from('categories').update({ name: name.trim() }).eq('id', id).eq('user_id', user.id).select().single()
   if (error) throw new Error(error.message)
   return data
 }
 
 export async function deleteCategory(id: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const firebase = await createClient()
+  const { data: { user } } = await firebase.auth.getUser()
   if (!user) throw new Error('Authentication required')
-  const { error } = await supabase.from('categories').delete().eq('id', id).eq('user_id', user.id)
+  const { error } = await firebase.from('categories').delete().eq('id', id).eq('user_id', user.id)
   if (error) throw new Error(error.message)
 }
