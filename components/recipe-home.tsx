@@ -29,6 +29,7 @@ type Recipe = {
   ingredients?: any[]
   instructions?: any[]
   category_id?: string | null
+  imageUrls?: string[] | null
   image_url?: string | null
   categoryId?: string | null
   imageUrl?: string | null
@@ -404,7 +405,7 @@ export function RecipeHome({ recipes, email, userId }: { recipes: Recipe[]; emai
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {visible.map((recipe) => { 
               const saved = favorites.includes(recipe.id)
-              const cardImage = 'image_url' in recipe ? recipe.image_url : recipe.imageUrl ?? recipe.imageUrl
+              const cardImage = ('imageUrls' in recipe ? recipe.imageUrls?.[0] : undefined) ?? ('image_url' in recipe ? recipe.image_url : recipe.imageUrl ?? null)
               const recipeCategory = categories.find(c => c.id === ('category_id' in recipe ? recipe.category_id : recipe.categoryId))
 
               // Safe extraction of display cover image from single-URL or multiple-images JSON array

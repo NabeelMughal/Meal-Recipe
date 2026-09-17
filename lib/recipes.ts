@@ -11,6 +11,7 @@ export type RecipeInput = {
   ingredients: Array<{ name: string; quantity: string; unit: string; notes: string }>
   instructions: string[]
   category_id?: string | null
+  imageUrls?: string[]
   image_url?: string | null
 }
 
@@ -125,6 +126,7 @@ function recipePayload(userId: string, input: RecipeInput) {
     servings: input.servings,
     difficulty: input.difficulty,
     category_id: input.category_id || null,
+    imageUrls: input.imageUrls ?? (input.image_url ? [input.image_url] : []),
     image_url: input.image_url || null,
     created_at: new Date().toISOString(),
   }
