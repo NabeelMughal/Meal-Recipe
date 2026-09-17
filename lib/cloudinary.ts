@@ -35,12 +35,15 @@ export async function uploadRecipePhoto(file: File) {
   const body = new FormData()
   body.append('file', await compressImage(file))
   body.append('upload_preset', uploadPreset)
-  body.append('eager', 'c_limit,w_800,h_800,f_auto,q_auto')
   const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, { method: 'POST', body })
   if (!response.ok) throw new Error('Image upload failed')
   const result = await response.json() as { secure_url?: string }
   if (!result.secure_url) throw new Error('Image upload returned no URL')
-  return result.secure_url
+  return withRecipeImageTransform(result.secure_url)
+}
+
+function withRecipeImageTransform(url: string) {
+  return url.replace('/upload/', '/upload/c_limit,w_800,h_800,q_auto,f_auto/')
 }
 
 export { compressImage }
