@@ -6,7 +6,7 @@ import { onAuthStateChanged } from 'firebase/auth'
 import { createCategory, createRecipe, listCategories, updateRecipe } from '@/lib/recipes'
 import { uploadRecipePhoto } from '@/lib/cloudinary'
 import { useRouter } from 'next/navigation'
-import { Plus, Trash2, Image as ImageIcon, Loader2, X, ArrowLeft } from 'lucide-react'
+import { Plus, Trash2, Image as ImageIcon, Loader2, X, ArrowLeft, Sparkles } from 'lucide-react'
 import { listCachedCategories } from '@/lib/offline-db'
 import { FullScreenLoading } from './full-screen-loading'
 
@@ -53,6 +53,13 @@ function compressImage(file: File): Promise<string> {
   })
 }
 
+function normalizeDifficulty(value?: string) {
+  const normalized = (value ?? '').trim().toLowerCase()
+  if (normalized === 'medium') return 'medium'
+  if (normalized === 'hard') return 'hard'
+  return 'easy'
+}
+
 type Ingredient = { name: string; quantity: string; unit: string; notes: string }
 
 type Recipe = { 
@@ -94,7 +101,7 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
     }
     return [recipe.image_url]
   })
-  
+  const [pendingAiFiles, setPendingAiFiles] = useState<File[]>([])
   const [inputUrl, setInputUrl] = useState('')
   
   // Ingredients state setup (initialize with default structure, combining quantity, unit, and notes for edit mode)
@@ -128,7 +135,10 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
   const [categoryLoading, setCategoryLoading] = useState(false)
   const [imageLoading, setImageLoading] = useState(false)
   const [imageError, setImageError] = useState('')
+  const [aiParsing, setAiParsing] = useState(false)
+  const [aiError, setAiError] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const aiFileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (fileInputRef.current) fileInputRef.current.value = ''
@@ -168,6 +178,98 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
 
   function updateIngredient(index: number, key: keyof Ingredient, value: string) {
     setIngredients((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: value } : item))
+  }
+
+  function applyParsedRecipe(data: any) {
+    const parsedTitle = String(data?.title ?? '').trim()
+    const parsedDescription = String(data?.description ?? '').trim()
+    const parsedCategory = String(data?.category ?? '').trim()
+    const parsedPrep = Number(data?.prepTime ?? data?.prep_time ?? 0)
+    const parsedCook = Number(data?.cookTime ?? data?.cook_time ?? 0)
+    const parsedServings = Number(data?.servings ?? 2)
+    const parsedDifficulty = normalizeDifficulty(data?.difficulty)
+
+    setTitle(parsedTitle || title || '')
+    setDescription(parsedDescription || description || '')
+    setPrep(String(Number.isFinite(parsedPrep) && parsedPrep > 0 ? parsedPrep : 0))
+    setCook(String(Number.isFinite(parsedCook) && parsedCook > 0 ? parsedCook : 0))
+    setServings(String(Number.isFinite(parsedServings) && parsedServings > 0 ? parsedServings : 2))
+    setDifficulty(parsedDifficulty as 'easy' | 'medium' | 'hard')
+
+    const suggestedIngredients = Array.isArray(data?.ingredients) && data.ingredients.length > 0
+      ? data.ingredients.map((item: any) => ({
+          name: String(item?.name ?? '').trim(),
+          quantity: String(item?.notes ?? '').trim(),
+          unit: '',
+          notes: '',
+        }))
+      : [{ name: '', quantity: '', unit: '', notes: '' }]
+    setIngredients(suggestedIngredients)
+
+    const suggestedInstructions = Array.isArray(data?.instructions) && data.instructions.length > 0
+      ? data.instructions.map((step: any) => String(step ?? '').trim()).filter(Boolean)
+      : ['']
+    setInstructions(suggestedInstructions.length ? suggestedInstructions : [''])
+
+    const matchedCategory = categories.find((category) => category.name.toLowerCase() === parsedCategory.toLowerCase())
+    if (matchedCategory) {
+      setCategoryId(matchedCategory.id)
+      setIsAddingCategory(false)
+      setNewCategoryName('')
+    } else if (parsedCategory) {
+      setCategoryId('')
+      setIsAddingCategory(true)
+      setNewCategoryName(parsedCategory)
+    } else {
+      setCategoryId('')
+      setIsAddingCategory(false)
+      setNewCategoryName('')
+    }
+  }
+
+  async function handleAiScanUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    event.target.value = ''
+
+    if (!file.type.startsWith('image/')) {
+      setAiError('Please upload a valid image file.')
+      return
+    }
+
+    const previewUrl = URL.createObjectURL(file)
+    setAiError('')
+    setAiParsing(true)
+    setImageUrls((current) => [...current, previewUrl])
+    setPendingAiFiles((current) => [...current, file])
+
+    try {
+      const formData = new FormData()
+      formData.append('image', file)
+
+      const response = await fetch('/api/parse-recipe', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const responseData = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(responseData?.error || 'The AI scanner could not read this recipe.')
+      }
+
+      if (!responseData || typeof responseData !== 'object') {
+        throw new Error('The recipe scan returned no data.')
+      }
+
+      applyParsedRecipe(responseData)
+      setMessage('')
+    } catch (err: any) {
+      setImageUrls((current) => current.filter((url) => url !== previewUrl))
+      setPendingAiFiles((current) => current.slice(0, -1))
+      setAiError(err.message ?? 'Could not scan this photo.')
+    } finally {
+      setAiParsing(false)
+    }
   }
 
   // Handle category creation inline
@@ -233,6 +335,17 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
     setImageError('')
   }
 
+  async function uploadPendingAiImages() {
+    if (!pendingAiFiles.length) return imageUrls.filter((url) => !url.startsWith('blob:'))
+
+    const uploadedUrls = await Promise.all(pendingAiFiles.map((file) => uploadRecipePhoto(file)))
+    const existingUrls = imageUrls.filter((url) => !url.startsWith('blob:'))
+    const nextUrls = [...existingUrls, ...uploadedUrls].slice(0, 5)
+    setImageUrls(nextUrls)
+    setPendingAiFiles([])
+    return nextUrls
+  }
+
   // Submit recipe (Create or Update)
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -246,6 +359,7 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
         return
       }
 
+      const finalImageUrls = await uploadPendingAiImages()
       const payload = {
         title: title.trim(),
         description: description.trim(),
@@ -254,15 +368,17 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
         servings: Math.max(1, Number(servings) || 1),
         difficulty,
         category_id: categoryId || null,
-        imageUrls: imageUrls.slice(0, 5),
-        image_url: imageUrls.length > 0 ? JSON.stringify(imageUrls.slice(0, 5)) : null,
+        imageUrls: finalImageUrls.slice(0, 5),
+        image_url: finalImageUrls.length > 0 ? JSON.stringify(finalImageUrls.slice(0, 5)) : null,
         ingredients,
         instructions,
       }
       const saved = recipe ? await updateRecipe(recipe.id, payload) : await createRecipe(payload)
       setImageUrls([])
       setInputUrl('')
+      setPendingAiFiles([])
       if (fileInputRef.current) fileInputRef.current.value = ''
+      if (aiFileInputRef.current) aiFileInputRef.current.value = ''
       window.alert(recipe ? 'Recipe updated.' : 'Recipe created.')
       router.push(recipe ? `/recipes/${saved?.id ?? recipe.id}` : '/')
     } catch (err: any) {
@@ -275,9 +391,35 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
   return (
     <form onSubmit={submit} className="flex flex-col gap-8 transition-all duration-300">
       <FullScreenLoading show={busy} message="Saving recipe to cookbook..." />
+      <FullScreenLoading show={aiParsing} message="AI is scanning and translating your recipe into English..." />
       
       {/* Recipe Meta Section */}
       <div className="grid gap-5 md:grid-cols-2">
+        <div className="md:col-span-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm font-medium text-foreground">Recipe details</div>
+          <button
+            type="button"
+            onClick={() => aiFileInputRef.current?.click()}
+            className="inline-flex items-center gap-2 self-start rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm font-semibold text-primary shadow-sm transition-all hover:-translate-y-0.5 hover:bg-primary/10"
+          >
+            <Sparkles size={16} className="text-primary" />
+            Upload Recipe Photo for AI Auto-Fill
+          </button>
+          <input
+            ref={aiFileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleAiScanUpload}
+          />
+        </div>
+
+        {aiError && (
+          <div className="md:col-span-2 rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            {aiError}
+          </div>
+        )}
+
         <label className="md:col-span-2">
           <span className="field-label">Recipe title</span>
           <input 
@@ -378,7 +520,13 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
                     />
                     <button 
                       type="button" 
-                      onClick={() => setImageUrls(prev => prev.filter((_, i) => i !== idx))}
+                      onClick={() => {
+                        setImageUrls(prev => prev.filter((_, i) => i !== idx))
+                        if (url.startsWith('blob:')) {
+                          URL.revokeObjectURL(url)
+                          setPendingAiFiles((prev) => prev.slice(0, -1))
+                        }
+                      }}
                       className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-black/85 rounded-full text-white transition-all shadow-md"
                       aria-label="Remove image"
                     >
@@ -581,7 +729,7 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
       
       {/* Submit Button with Loading State */}
       <button 
-        disabled={busy || imageLoading} 
+        disabled={busy || imageLoading || aiParsing} 
         className="rounded-full bg-primary hover:bg-primary/95 active:scale-95 px-8 py-4 font-medium text-primary-foreground disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer shadow-md hover:shadow-lg transition-all duration-200"
       >
         {busy ? (
