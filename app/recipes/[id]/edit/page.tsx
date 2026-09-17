@@ -7,7 +7,7 @@ import { ArrowLeft } from 'lucide-react'
 import { RecipeEditor } from '@/components/recipe-editor'
 import { FullScreenLoading } from '@/components/full-screen-loading'
 import { useAuthGuard } from '@/lib/use-auth-guard'
-import { createClient } from '@/lib/firebase-client'
+import { getRecipe } from '@/lib/recipes'
 
 export default function EditRecipePage() {
   const { id } = useParams<{ id: string }>()
@@ -18,15 +18,34 @@ export default function EditRecipePage() {
 
   useEffect(() => {
     if (authLoading || !user || !id) return
-    createClient().from('recipes').select('*, ingredients(*), instructions(*)').eq('id', id).eq('user_id', user.uid).maybeSingle().then(({ data }: { data: any }) => {
-      if (!data) router.replace('/not-found')
-      else {
-        data.ingredients = [...(data.ingredients ?? [])].sort((a: any, b: any) => a.position - b.position)
-        data.instructions = [...(data.instructions ?? [])].sort((a: any, b: any) => a.position - b.position)
+
+    let cancelled = false
+    async function loadRecipe() {
+      setLoading(true)
+      try {
+        const data = await getRecipe(id)
+        if (cancelled) return
+        if (!data) {
+          router.replace('/not-found')
+          return
+        }
+
+        data.ingredients = [...(data.ingredients ?? [])].sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))
+        data.instructions = [...(data.instructions ?? [])].sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))
         setRecipe(data)
+      } catch (error: any) {
+        console.error('Edit recipe fetch failed:', {
+          code: error?.code ?? 'unknown',
+          message: error?.message ?? String(error),
+        })
+        if (!cancelled) router.replace('/not-found')
+      } finally {
+        if (!cancelled) setLoading(false)
       }
-      setLoading(false)
-    })
+    }
+
+    void loadRecipe()
+    return () => { cancelled = true }
   }, [authLoading, id, router, user])
 
   if (authLoading || loading) return <FullScreenLoading show message="Loading recipe..." />
