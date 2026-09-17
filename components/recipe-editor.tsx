@@ -64,6 +64,7 @@ type Recipe = {
   cooking_time: number
   servings: number
   category_id?: string | null
+  imageUrls?: string[] | null
   image_url?: string | null
   ingredients?: Array<{ name: string; quantity: string; unit: string; notes?: string }>
   instructions?: Array<{ instruction: string }>
@@ -81,11 +82,13 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
   
   // Multiple images state (backward-compatible)
   const [imageUrls, setImageUrls] = useState<string[]>(() => {
+    if (recipe?.imageUrls?.length) return recipe.imageUrls.filter(Boolean)
     if (!recipe?.image_url) return []
     if (recipe.image_url.startsWith('[')) {
       try {
-        return JSON.parse(recipe.image_url)
-      } catch (e) {
+        const parsed = JSON.parse(recipe.image_url)
+        return Array.isArray(parsed) ? parsed.filter(Boolean) : []
+      } catch {
         return [recipe.image_url]
       }
     }
@@ -197,7 +200,14 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
   async function handleImageFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
     if (!files.length) return
-    
+    const remainingSlots = Math.max(0, 5 - imageUrls.length)
+    if (remainingSlots === 0) {
+      setImageError('You can add up to 5 images per recipe.')
+      e.currentTarget.value = ''
+      return
+    }
+    const selectedFiles = files.slice(0, remainingSlots)
+    if (files.length > remainingSlots) setImageError('Only the first 5 images were added.')
     setImageLoading(true)
     setImageError('')
     // Allow selecting the same file again and prevent stale input state from
@@ -205,7 +215,7 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
     e.currentTarget.value = ''
 
     try {
-      const uploadedUrls = await Promise.all(files.map((file) => uploadRecipePhoto(file)))
+      const uploadedUrls = await Promise.all(selectedFiles.map((file) => uploadRecipePhoto(file)))
       setImageUrls((prev) => [...prev, ...uploadedUrls])
     } catch (err: any) {
       setImageError(err.message ?? 'Failed to process one or more images.')
@@ -244,7 +254,8 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
         servings: Math.max(1, Number(servings) || 1),
         difficulty,
         category_id: categoryId || null,
-        image_url: imageUrls.length > 0 ? JSON.stringify(imageUrls) : null,
+        imageUrls: imageUrls.slice(0, 5),
+        image_url: imageUrls.length > 0 ? JSON.stringify(imageUrls.slice(0, 5)) : null,
         ingredients,
         instructions,
       }
