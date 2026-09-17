@@ -32,9 +32,13 @@ export async function uploadRecipePhoto(file: File) {
   const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET
   if (!cloudName || !uploadPreset) throw new Error('Cloudinary upload is not configured')
 
+  const compressed = await compressImage(file)
+  const filename = `recipe_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`
+  const uploadFile = new File([compressed], filename, { type: 'image/jpeg' })
   const body = new FormData()
-  body.append('file', await compressImage(file))
+  body.append('file', uploadFile, filename)
   body.append('upload_preset', uploadPreset)
+  body.append('folder', 'recipes')
   const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, { method: 'POST', body })
   if (!response.ok) throw new Error('Image upload failed')
   const result = await response.json() as { secure_url?: string }
