@@ -9,7 +9,7 @@ import { InteractiveIngredients } from '@/components/interactive-ingredients'
 import { ImageSlideshow } from '@/components/image-slideshow'
 import { FullScreenLoading } from '@/components/full-screen-loading'
 import { useAuthGuard } from '@/lib/use-auth-guard'
-import { createClient } from '@/lib/firebase-client'
+import { getRecipe } from '@/lib/recipes'
 
 export default function RecipePage() {
   const { id } = useParams<{ id: string }>()
@@ -22,38 +22,13 @@ export default function RecipePage() {
     if (authLoading || !user || !id) return
 
     let cancelled = false
-    const uid = user.uid
-    const firebase = createClient()
-
     async function loadRecipe() {
       setLoading(true)
       try {
-        const primary = await firebase.from('recipes').select('*, ingredients(*), instructions(*), categories(name)').eq('id', id).eq('user_id', uid).maybeSingle()
-        let result = primary
-
-        if (primary.error) {
-          console.error('Recipe detail query failed; using fallback:', {
-            code: primary.error.code ?? 'unknown',
-            message: primary.error.message ?? String(primary.error),
-          })
-          result = await firebase.from('recipes').select('*, ingredients(*), instructions(*)').eq('id', id).eq('user_id', uid).maybeSingle()
-        }
-
-        if (result.error) {
-          console.error('Recipe detail fallback failed:', {
-            code: result.error.code ?? 'unknown',
-            message: result.error.message ?? String(result.error),
-          })
-          if (!cancelled) setRecipe(null)
-          return
-        }
-
-        if (!cancelled) {
-          const data = result.data
-          if (data?.ingredients) data.ingredients.sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))
-          if (data?.instructions) data.instructions.sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))
-          setRecipe(data ?? null)
-        }
+        // getRecipe handles the ordered subcollection queries independently and
+        // falls back to client-side sorting when an index is unavailable.
+        const data = await getRecipe(id)
+        if (!cancelled) setRecipe(data ?? null)
       } catch (error: any) {
         console.error('Recipe detail fetch failed:', {
           code: error?.code ?? 'unknown',
