@@ -20,14 +20,53 @@ export default function RecipePage() {
 
   useEffect(() => {
     if (authLoading || !user || !id) return
+
+    let cancelled = false
+    const uid = user.uid
     const firebase = createClient()
-    firebase.from('recipes').select('*, ingredients(*), instructions(*), categories(name)').eq('id', id).eq('user_id', user.uid).maybeSingle().then(async ({ data, error }: { data: any; error: any }) => {
-      if (error) {
-        const fallback = await firebase.from('recipes').select('*, ingredients(*), instructions(*)').eq('id', id).eq('user_id', user.uid).maybeSingle()
-        setRecipe(fallback.data)
-      } else setRecipe(data)
-      setLoading(false)
-    })
+
+    async function loadRecipe() {
+      setLoading(true)
+      try {
+        const primary = await firebase.from('recipes').select('*, ingredients(*), instructions(*), categories(name)').eq('id', id).eq('user_id', uid).maybeSingle()
+        let result = primary
+
+        if (primary.error) {
+          console.error('Recipe detail query failed; using fallback:', {
+            code: primary.error.code ?? 'unknown',
+            message: primary.error.message ?? String(primary.error),
+          })
+          result = await firebase.from('recipes').select('*, ingredients(*), instructions(*)').eq('id', id).eq('user_id', uid).maybeSingle()
+        }
+
+        if (result.error) {
+          console.error('Recipe detail fallback failed:', {
+            code: result.error.code ?? 'unknown',
+            message: result.error.message ?? String(result.error),
+          })
+          if (!cancelled) setRecipe(null)
+          return
+        }
+
+        if (!cancelled) {
+          const data = result.data
+          if (data?.ingredients) data.ingredients.sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))
+          if (data?.instructions) data.instructions.sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))
+          setRecipe(data ?? null)
+        }
+      } catch (error: any) {
+        console.error('Recipe detail fetch failed:', {
+          code: error?.code ?? 'unknown',
+          message: error?.message ?? String(error),
+        })
+        if (!cancelled) setRecipe(null)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    void loadRecipe()
+    return () => { cancelled = true }
   }, [authLoading, id, user])
 
   if (authLoading || loading) return <FullScreenLoading show message="Opening recipe..." />

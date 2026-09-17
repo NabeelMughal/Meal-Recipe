@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, FormEvent } from 'react'
+import { useState, useEffect, useRef, FormEvent } from 'react'
 import { auth } from '@/lib/firebase'
 import { onAuthStateChanged } from 'firebase/auth'
 import { createCategory, createRecipe, listCategories, updateRecipe } from '@/lib/recipes'
@@ -125,6 +125,11 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
   const [categoryLoading, setCategoryLoading] = useState(false)
   const [imageLoading, setImageLoading] = useState(false)
   const [imageError, setImageError] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }, [recipe?.id])
 
   // Warn on unsaved changes before leaving
   useEffect(() => {
@@ -195,6 +200,9 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
     
     setImageLoading(true)
     setImageError('')
+    // Allow selecting the same file again and prevent stale input state from
+    // carrying an upload into a different recipe form.
+    e.currentTarget.value = ''
 
     try {
       const uploadedUrls = await Promise.all(files.map((file) => uploadRecipePhoto(file)))
@@ -241,6 +249,9 @@ export function RecipeEditor({ recipe }: { recipe?: Recipe }) {
         instructions,
       }
       const saved = recipe ? await updateRecipe(recipe.id, payload) : await createRecipe(payload)
+      setImageUrls([])
+      setInputUrl('')
+      if (fileInputRef.current) fileInputRef.current.value = ''
       window.alert(recipe ? 'Recipe updated.' : 'Recipe created.')
       router.push(recipe ? `/recipes/${saved?.id ?? recipe.id}` : '/')
     } catch (err: any) {
