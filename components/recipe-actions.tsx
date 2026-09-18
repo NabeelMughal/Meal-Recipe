@@ -37,6 +37,50 @@ const styles = StyleSheet.create({
   stepNumber: { width: 18, fontSize: 9, color: '#8c7e6c', fontWeight: 'bold', lineHeight: 1.35 }
 })
 
+async function fetchImageAsBase64(url: string): Promise<string> {
+  if (!url) return ''
+  if (url.startsWith('data:')) return url
+
+  let controller: AbortController | null = null
+  const timeoutId = window.setTimeout(() => {
+    controller?.abort()
+  }, 15000)
+
+  try {
+    controller = new AbortController()
+    const response = await fetch(url, {
+      mode: 'cors',
+      credentials: 'omit',
+      signal: controller.signal,
+    })
+
+    if (!response.ok) {
+      throw new Error(`Image request failed with status ${response.status}`)
+    }
+
+    const blob = await response.blob()
+    if (!blob || blob.size === 0) {
+      throw new Error('Image blob is empty')
+    }
+
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const result = typeof reader.result === 'string' ? reader.result : ''
+        if (!result) reject(new Error('Unable to convert image to Base64 data URL'))
+        else resolve(result)
+      }
+      reader.onerror = () => reject(new Error('Failed to read image blob as Base64'))
+      reader.readAsDataURL(blob)
+    })
+  } catch (error) {
+    console.warn('PDF image preload failed. Falling back without image:', error)
+    return ''
+  } finally {
+    window.clearTimeout(timeoutId)
+  }
+}
+
 function resolveRecipeImageUrl(rawImageUrl?: string | null) {
   if (!rawImageUrl) return ''
 
@@ -53,29 +97,6 @@ function resolveRecipeImageUrl(rawImageUrl?: string | null) {
   }
 
   return rawImageUrl
-}
-
-async function resolvePdfImageSource(rawImageUrl?: string | null) {
-  const resolved = resolveRecipeImageUrl(rawImageUrl)
-  if (!resolved) return ''
-
-  try {
-    const response = await fetch(resolved)
-    if (!response.ok) return resolved
-
-    const blob = await response.blob()
-    if (!blob.type || blob.size === 0) return resolved
-
-    return await new Promise<string>((resolve) => {
-      const reader = new FileReader()
-      reader.onloadend = () => resolve(String(reader.result ?? resolved))
-      reader.onerror = () => resolve(resolved)
-      reader.readAsDataURL(blob)
-    })
-  } catch (error) {
-    console.warn('Image conversion for PDF export failed, using original URL fallback:', error)
-    return resolved
-  }
 }
 
 function RecipeDocument({ title, description, ingredients, instructions, prep = 0, cook = 0, servings = 1, difficulty = 'easy', imageUrl }: Omit<Props, 'recipeId'>) { 
@@ -169,7 +190,7 @@ export function RecipeActions({
   async function download() { 
     setDownloadBusy(true) 
     try { 
-      const pdfImageUrl = await resolvePdfImageSource(imageUrl)
+      const pdfImageUrl = await fetchImageAsBase64(resolveRecipeImageUrl(imageUrl ?? ''))
       const blob = await pdf(
         <RecipeDocument 
           title={title} 
