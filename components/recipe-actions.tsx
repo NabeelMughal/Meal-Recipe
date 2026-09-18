@@ -22,35 +22,64 @@ type Props = {
 }
 
 const styles = StyleSheet.create({ 
-  page: { padding: 44, fontSize: 10, color: '#33302c', fontFamily: 'Helvetica' }, 
-  header: { marginBottom: 15, borderBottomWidth: 1, borderBottomColor: '#f0ede6', paddingBottom: 15 },
+  page: { padding: 36, fontSize: 10, color: '#33302c', fontFamily: 'Helvetica' }, 
+  header: { marginBottom: 10, borderBottomWidth: 1, borderBottomColor: '#f0ede6', paddingBottom: 12 },
   brand: { fontSize: 8, color: '#8c7e6c', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 6 },
-  title: { fontSize: 24, color: '#40301d', fontWeight: 'bold', marginBottom: 6 },
-  description: { fontSize: 10, color: '#666159', fontStyle: 'italic', lineHeight: 1.4, marginBottom: 10 },
-  recipeImage: { width: '100%', height: 180, objectFit: 'cover', borderRadius: 12, marginBottom: 15 },
-  metaRow: { flexDirection: 'row', gap: 15, borderBottomWidth: 1, borderBottomColor: '#f5f2eb', paddingBottom: 8, marginBottom: 15 },
-  metaItem: { fontSize: 9, color: '#8c7e6c' },
-  section: { fontSize: 13, color: '#40301d', fontWeight: 'bold', marginTop: 15, marginBottom: 8, borderBottomWidth: 1, borderBottomColor: '#e8e5dc', paddingBottom: 3 },
-  listItem: { marginBottom: 5, lineHeight: 1.4, flexDirection: 'row' },
-  listBullet: { width: 12, fontSize: 10, color: '#8c7e6c' },
-  listText: { flex: 1, fontSize: 10 },
-  stepNumber: { width: 20, fontSize: 10, color: '#8c7e6c', fontWeight: 'bold' }
+  title: { fontSize: 22, color: '#40301d', fontWeight: 'bold', marginBottom: 6, lineHeight: 1.25 },
+  description: { fontSize: 9, color: '#666159', fontStyle: 'italic', lineHeight: 1.3, marginBottom: 8 },
+  recipeImage: { width: '100%', height: 160, objectFit: 'cover', borderRadius: 10, marginBottom: 12 },
+  metaRow: { flexDirection: 'row', gap: 12, borderBottomWidth: 1, borderBottomColor: '#f5f2eb', paddingBottom: 8, marginBottom: 10, flexWrap: 'wrap' },
+  metaItem: { fontSize: 8, color: '#8c7e6c', lineHeight: 1.3 },
+  section: { fontSize: 12, color: '#40301d', fontWeight: 'bold', marginTop: 12, marginBottom: 6, borderBottomWidth: 1, borderBottomColor: '#e8e5dc', paddingBottom: 3 },
+  listItem: { marginBottom: 4, lineHeight: 1.3, flexDirection: 'row' },
+  listBullet: { width: 12, fontSize: 10, color: '#8c7e6c', lineHeight: 1.3 },
+  listText: { flex: 1, fontSize: 9, lineHeight: 1.35 },
+  stepNumber: { width: 18, fontSize: 9, color: '#8c7e6c', fontWeight: 'bold', lineHeight: 1.35 }
 })
 
-function RecipeDocument({ title, description, ingredients, instructions, prep = 0, cook = 0, servings = 1, difficulty = 'easy', imageUrl }: Omit<Props, 'recipeId'>) { 
-  let firstImage = ''
-  if (imageUrl) {
-    if (imageUrl.startsWith('[')) {
-      try {
-        const parsed = JSON.parse(imageUrl)
-        if (parsed && parsed.length > 0) firstImage = parsed[0]
-      } catch (e) {
-        firstImage = imageUrl
+function resolveRecipeImageUrl(rawImageUrl?: string | null) {
+  if (!rawImageUrl) return ''
+
+  if (rawImageUrl.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(rawImageUrl)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const firstValue = parsed.find((value) => typeof value === 'string' && value.trim())
+        return typeof firstValue === 'string' ? firstValue : ''
       }
-    } else {
-      firstImage = imageUrl
+    } catch {
+      return rawImageUrl
     }
   }
+
+  return rawImageUrl
+}
+
+async function resolvePdfImageSource(rawImageUrl?: string | null) {
+  const resolved = resolveRecipeImageUrl(rawImageUrl)
+  if (!resolved) return ''
+
+  try {
+    const response = await fetch(resolved)
+    if (!response.ok) return resolved
+
+    const blob = await response.blob()
+    if (!blob.type || blob.size === 0) return resolved
+
+    return await new Promise<string>((resolve) => {
+      const reader = new FileReader()
+      reader.onloadend = () => resolve(String(reader.result ?? resolved))
+      reader.onerror = () => resolve(resolved)
+      reader.readAsDataURL(blob)
+    })
+  } catch (error) {
+    console.warn('Image conversion for PDF export failed, using original URL fallback:', error)
+    return resolved
+  }
+}
+
+function RecipeDocument({ title, description, ingredients, instructions, prep = 0, cook = 0, servings = 1, difficulty = 'easy', imageUrl }: Omit<Props, 'recipeId'>) { 
+  const firstImage = resolveRecipeImageUrl(imageUrl)
 
   return (
     <Document>
@@ -140,6 +169,7 @@ export function RecipeActions({
   async function download() { 
     setDownloadBusy(true) 
     try { 
+      const pdfImageUrl = await resolvePdfImageSource(imageUrl)
       const blob = await pdf(
         <RecipeDocument 
           title={title} 
@@ -150,7 +180,7 @@ export function RecipeActions({
           cook={cook}
           servings={servings}
           difficulty={difficulty}
-          imageUrl={imageUrl}
+          imageUrl={pdfImageUrl}
         />
       ).toBlob()
 
