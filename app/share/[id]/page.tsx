@@ -1,11 +1,8 @@
 'use client'
 
-import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Clock, ChefHat, Users, ExternalLink } from 'lucide-react'
 import { FullScreenLoading } from '@/components/full-screen-loading'
-import { ImageSlideshow } from '@/components/image-slideshow'
 import { getPublicRecipe } from '@/lib/recipes'
 
 export default function PublicRecipeSharePage() {
@@ -44,18 +41,25 @@ export default function PublicRecipeSharePage() {
     }
   }, [id])
 
-  if (loading) return <FullScreenLoading show message="Loading recipe..." />
+  if (loading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#f6f4f1] px-4">
+        <div className="w-full max-w-lg rounded-3xl border border-border bg-card p-6 shadow-sm">
+          <FullScreenLoading show message="Loading recipe..." />
+        </div>
+      </main>
+    )
+  }
 
   if (!recipe) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-background px-5 text-center">
-        <div className="max-w-md rounded-3xl border border-border bg-card p-8 shadow-sm">
-          <p className="text-xs font-mono font-semibold uppercase tracking-[0.2em] text-muted-foreground">Recipe unavailable</p>
-          <h1 className="mt-4 font-serif text-4xl text-foreground">Recipe not found.</h1>
-          <p className="mt-3 text-sm text-muted-foreground">This shared recipe link may be invalid, expired, or private.</p>
-          <Link href="/" className="mt-6 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90">
-            <ArrowLeft size={15} /> Back to cookbook
-          </Link>
+      <main className="flex min-h-screen items-center justify-center bg-[#f6f4f1] px-4">
+        <div className="w-full max-w-lg rounded-3xl border border-border bg-card p-6 shadow-sm">
+          <div className="flex items-center justify-between border-b border-border/40 pb-3 mb-4">
+            <span className="font-mono text-xs uppercase tracking-wider text-primary font-semibold">Recipe Summary</span>
+          </div>
+          <h2 className="font-serif text-2xl text-foreground font-semibold leading-tight">Recipe not found.</h2>
+          <p className="text-xs text-muted-foreground mt-2 leading-relaxed italic">This shared recipe link may be invalid or no longer available.</p>
         </div>
       </main>
     )
@@ -64,98 +68,55 @@ export default function PublicRecipeSharePage() {
   const ingredients = [...(recipe.ingredients ?? [])].sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))
   const instructions = [...(recipe.instructions ?? [])].sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))
 
-  let images: string[] = Array.isArray(recipe.imageUrls) ? recipe.imageUrls.filter(Boolean) : []
-  if (!images.length && recipe.image_url) {
-    if (recipe.image_url.startsWith('[')) {
-      try {
-        const parsed = JSON.parse(recipe.image_url)
-        images = Array.isArray(parsed) ? parsed.filter(Boolean) : []
-      } catch {
-        images = [recipe.image_url]
-      }
-    } else {
-      images = [recipe.image_url]
-    }
-  }
-
   return (
-    <main className="min-h-screen bg-background text-foreground">
-      <header className="mx-auto flex max-w-5xl items-center justify-between border-b border-border/30 px-5 py-6 sm:px-10">
-        <Link href="/" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft size={16} /> Cookbook
-        </Link>
-        <Link href="/" className="font-serif text-2xl">
-          crumb<span className="text-primary">.</span>
-        </Link>
-      </header>
+    <main className="flex min-h-screen items-center justify-center bg-[#f6f4f1] px-4 py-10 sm:px-6">
+      <div className="w-full max-w-2xl rounded-3xl border border-border bg-card p-4 shadow-[0_18px_40px_rgba(20,15,12,0.08)] sm:p-6">
+        <div className="flex items-center justify-between border-b border-border/40 pb-3 mb-4">
+          <span className="font-mono text-xs uppercase tracking-wider text-primary font-semibold">Recipe Summary</span>
+        </div>
 
-      <article className="mx-auto max-w-5xl px-5 pb-24 pt-8 sm:px-10">
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">
-            Shared recipe
+        <h2 className="font-serif text-2xl text-foreground font-semibold leading-tight sm:text-[2rem]">{recipe.title}</h2>
+        {recipe.description && <p className="text-xs text-muted-foreground mt-2 leading-relaxed italic">{recipe.description}</p>}
+
+        <div className="flex flex-wrap gap-1.5 mt-4">
+          <span className="px-2 py-0.5 rounded-full bg-primary/15 text-primary text-[9px] font-mono font-semibold uppercase tracking-wider border border-primary/20">
+            Difficulty: {recipe.difficulty ?? 'easy'}
           </span>
-          <span className="flex items-center gap-1.5 rounded-full border border-border/45 bg-muted/60 px-3 py-1 text-xs text-muted-foreground">
-            <ChefHat size={12} /> <span className="capitalize">{recipe.difficulty ?? 'easy'} level</span>
+          <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground text-[9px] font-mono font-semibold uppercase tracking-wider">
+            Prep: {recipe.preparation_time ?? 0} mins
           </span>
-          <span className="flex items-center gap-1.5 rounded-full border border-border/45 bg-muted/60 px-3 py-1 text-xs text-muted-foreground">
-            <Clock size={12} /> {Number(recipe.preparation_time ?? 0) + Number(recipe.cooking_time ?? 0)} min
+          <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground text-[9px] font-mono font-semibold uppercase tracking-wider">
+            Cook: {recipe.cooking_time ?? 0} mins
           </span>
-          <span className="flex items-center gap-1.5 rounded-full border border-border/45 bg-muted/60 px-3 py-1 text-xs text-muted-foreground">
-            <Users size={12} /> Serves {recipe.servings ?? 1}
+          <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground text-[9px] font-mono font-semibold uppercase tracking-wider">
+            {recipe.servings ?? 1} Servings
           </span>
         </div>
 
-        <h1 className="mt-5 font-serif text-4xl tracking-tight sm:text-6xl">{recipe.title}</h1>
-        {recipe.description && (
-          <p className="mt-4 max-w-3xl text-lg leading-relaxed text-muted-foreground">{recipe.description}</p>
-        )}
-
-        <div className="mt-8 rounded-3xl border border-border/60 bg-card p-4 shadow-sm sm:p-6">
-          <div className="flex items-center justify-between gap-3 border-b border-border/60 pb-3">
-            <span className="text-xs font-mono uppercase tracking-[0.22em] text-muted-foreground">Recipe preview</span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-              Read only <ExternalLink size={11} />
-            </span>
-          </div>
-          <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-            This is a public view of the recipe. It can be shared without sign in and does not include editing tools.
-          </p>
+        <div className="mt-6">
+          <h3 className="text-xs font-bold text-foreground uppercase tracking-wider border-b border-border pb-1 mb-2 font-mono">Ingredients List</h3>
+          <ul className="text-xs text-muted-foreground flex flex-col gap-1.5 pl-1">
+            {ingredients.map((item: any, idx: number) => (
+              <li key={item.id ?? `${item.name}-${idx}`} className="flex items-center gap-1.5">
+                <span className="text-primary font-bold text-[10px]">•</span>
+                <span>{[item.quantity, item.unit, item.name].filter(Boolean).join(' ')}</span>
+              </li>
+            ))}
+          </ul>
         </div>
 
-        {images.length > 0 && (
-          <div className="mt-8">
-            <ImageSlideshow images={images} />
-          </div>
-        )}
-
-        <div className="mt-12 grid gap-12 border-t border-border/20 pt-10 lg:grid-cols-[0.9fr_1.1fr]">
-          <section>
-            <h2 className="border-b border-border pb-3 font-serif text-3xl">Ingredients</h2>
-            <ul className="mt-5 space-y-3">
-              {ingredients.map((item: any, index: number) => (
-                <li key={item.id ?? `${item.name}-${index}`} className="flex items-start gap-3 rounded-2xl border border-border/40 bg-muted/20 p-3 text-sm text-muted-foreground">
-                  <span className="mt-0.5 text-base text-primary">•</span>
-                  <span>{[item.quantity, item.unit, item.name].filter(Boolean).join(' ')}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          <section>
-            <h2 className="mb-5 border-b border-border pb-3 font-serif text-3xl">Method</h2>
-            <ol className="flex flex-col gap-6">
-              {instructions.map((item: any, index: number) => (
-                <li key={item.id ?? `${item.instruction}-${index}`} className="flex gap-4 border-b border-border/20 pb-5 last:border-0">
-                  <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
-                    {index + 1}
-                  </span>
-                  <p className="leading-relaxed text-foreground/90">{item.instruction}</p>
-                </li>
-              ))}
-            </ol>
-          </section>
+        <div className="mt-5">
+          <h3 className="text-xs font-bold text-foreground uppercase tracking-wider border-b border-border pb-1 mb-2 font-mono">Method Overview</h3>
+          <ol className="text-xs text-muted-foreground flex flex-col gap-2.5 pl-1">
+            {instructions.map((item: any, idx: number) => (
+              <li key={item.id ?? `${item.instruction}-${idx}`} className="flex gap-2 items-start">
+                <span className="font-semibold text-primary font-mono text-[10px] shrink-0 mt-0.5">{idx + 1}.</span>
+                <span className="leading-relaxed">{item.instruction}</span>
+              </li>
+            ))}
+          </ol>
         </div>
-      </article>
+      </div>
     </main>
   )
 }
