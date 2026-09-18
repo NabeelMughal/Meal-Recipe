@@ -113,11 +113,12 @@ export function RecipeActions({
   const [downloadBusy, setDownloadBusy] = useState(false)
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [shareToast, setShareToast] = useState(false)
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
 
   // Share action
   async function share() { 
-    const url = window.location.href
+    const url = `${window.location.origin}/share/${recipeId}`
     if (navigator.share) { 
       try { 
         await navigator.share({ 
@@ -130,8 +131,8 @@ export function RecipeActions({
       } 
     } else { 
       await navigator.clipboard.writeText(url)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      setShareToast(true)
+      setTimeout(() => setShareToast(false), 2200)
     } 
   } 
 
@@ -152,7 +153,7 @@ export function RecipeActions({
           imageUrl={imageUrl}
         />
       ).toBlob()
-      
+
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
       anchor.href = url
@@ -183,15 +184,24 @@ export function RecipeActions({
 
   // Copy link action
   async function handleCopy() {
-    await navigator.clipboard.writeText(window.location.href)
+    await navigator.clipboard.writeText(`${window.location.origin}/share/${recipeId}`)
     setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    setShareToast(true)
+    setTimeout(() => {
+      setCopied(false)
+      setShareToast(false)
+    }, 2200)
   }
 
   return (
     <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 max-w-full print:hidden">
       <FullScreenLoading show={deleteBusy} message="Deleting recipe..." />
       <FullScreenLoading show={downloadBusy} message="Preparing PDF download..." />
+      {shareToast && (
+        <div className="fixed right-4 top-4 z-[60] rounded-full border border-primary/20 bg-card px-4 py-2 text-sm text-foreground shadow-lg">
+          Public recipe link copied to clipboard!
+        </div>
+      )}
       
       {/* Edit Recipe Button */}
       <Link 

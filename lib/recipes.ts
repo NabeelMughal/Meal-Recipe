@@ -1,5 +1,5 @@
 import { auth, db } from '@/lib/firebase'
-import { addDoc, collection, deleteDoc, doc, getDocs, orderBy, query, setDoc, where } from 'firebase/firestore'
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, orderBy, query, setDoc, where } from 'firebase/firestore'
 
 export type RecipeInput = {
   title: string
@@ -102,6 +102,25 @@ export async function getRecipe(id: string) {
   const snapshot = await getDocs(query(collection(db, 'recipes'), where('__name__', '==', id), where('user_id', '==', user.uid)))
   if (snapshot.empty) return null
   return { ...recipeData(snapshot)[0], ...(await related(id)) }
+}
+
+export async function getPublicRecipe(id: string) {
+  if (!id) return null
+
+  try {
+    const ref = doc(db, 'recipes', id)
+    const snapshot = await getDoc(ref)
+    if (!snapshot.exists()) return null
+
+    const data = { id: snapshot.id, ...snapshot.data() }
+    return { ...data, ...(await related(id)) }
+  } catch (error: any) {
+    console.error('Failed to load public recipe:', {
+      code: error?.code ?? 'unknown',
+      message: error?.message ?? String(error),
+    })
+    return null
+  }
 }
 
 async function saveRelated(recipeId: string, input: RecipeInput) {
